@@ -1,1 +1,476 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>テピョロギ - 古代石板の解読</title>
+    <style>
+      body {
+        background-color: #1b2732;
+        color: #e0e0e0;
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin: 0;
+        padding: 10px;
+      }
+      h1 {
+        letter-spacing: 0.3rem;
+        margin: 10px 0;
+        font-size: 1.5rem;
+        color: #f39c12;
+      }
 
+      /* 5x6 履歴ボード */
+      #board {
+        display: grid;
+        grid-template-rows: repeat(6, 1fr);
+        gap: 5px;
+        margin-bottom: 15px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 5px;
+      }
+      .tile {
+        width: 12vw; /* 画面幅に対して可変 */
+        height: 12vw;
+        max-width: 42px; /* 大きくなりすぎ防止 */
+        max-height: 42px;
+        border: 2px solid #444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        font-weight: bold;
+        background: #222;
+        box-sizing: border-box;
+      }
+
+      /* 6x6 タッチキーボード */
+      #keyboard-container {
+        position: relative;
+        padding: 5px;
+        background: #2a2a2a;
+        border-radius: 12px;
+        border-top: 4px solid #c0392b; /* 上下に赤（列ガイド） */
+        border-bottom: 4px solid #c0392b;
+        border-left: 4px solid #2980b9; /* 左右に青（行ガイド） */
+        border-right: 4px solid #2980b9;
+        box-sizing: border-box; /* 境界線を含めてサイズ計算 */
+        width: 95%; /* 画面幅いっぱいにしない */
+        max-width: 350px; /* PCで見ても広がりすぎない */
+        margin: 10px auto;
+        display: flex;
+        justify-content: center;
+      }
+
+      #keyboard {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+        width: 100%;
+        max-width: 300px;
+        background: #333;
+        padding: 10px;
+        border-radius: 8px;
+      }
+      .key {
+        aspect-ratio: 1/1;
+        background: #444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        cursor: pointer;
+        border-radius: 4px;
+        user-select: none;
+        border: 2px solid transparent;
+      }
+      .key:active {
+        background: #666;
+      }
+
+      .controls {
+        margin: 5px 0;
+      }
+      button#submit-btn {
+        padding: 5px 10px;
+        font-size: 1.1rem;
+        background: #f39c12;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      #back-btn {
+        padding: 5px 10px;
+        font-size: 1.1rem;
+        background: #7f8c8d;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-right: 10px;
+      }
+
+      #reset-btn {
+        padding: 5px 10px;
+        font-size: 1.1rem;
+        background: #27ae60;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-right: 10px;
+        display: none;
+      }
+
+      /* 成功：タイルが黄金に輝くアニメーション */
+      @keyframes success-glow {
+        0% {
+          box-shadow: 0 0 5px #f1c40f;
+          transform: scale(1);
+        }
+        50% {
+          box-shadow: 0 0 25px #f1c40f;
+          transform: scale(1.1);
+        }
+        100% {
+          box-shadow: 0 0 5px #f1c40f;
+          transform: scale(1);
+        }
+      }
+
+      .success-tile {
+        animation: success-glow 1s ease-in-out infinite;
+        border-color: #f1c40f !important;
+      }
+
+      /* 失敗：画面が震えるアニメーション */
+      @keyframes shake {
+        0% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-5px);
+        }
+        50% {
+          transform: translateX(5px);
+        }
+        75% {
+          transform: translateX(-5px);
+        }
+        100% {
+          transform: translateX(0);
+        }
+      }
+
+      .shake {
+        animation: shake 0.4s ease-in-out;
+      }
+
+      /* 正解表示のスタイル */
+      #answer-display {
+        font-size: 2rem;
+        color: #e74c3c;
+        font-weight: bold;
+        letter-spacing: 0.5rem;
+        margin-top: 10px;
+        display: none; /* 最初は隠しておく */
+      }
+    </style>
+  </head>
+  <body>
+    <h1>テピョロギ</h1>
+
+    <div id="board"></div>
+
+    <div class="controls">
+      <button id="back-btn" onclick="backspace()">1文字戻す</button>
+      <button id="submit-btn" onclick="submitGuess()">解読を実行</button>
+    </div>
+
+    <div id="keyboard-container">
+      <div id="keyboard"></div>
+    </div>
+
+    <p id="status">石板に触れ、呪文を紡げ...</p>
+
+    <button id="reset-btn" onclick="resetGame()">新しい石板を呼ぶ</button>
+
+    <script>
+      const ALL_CHARS =
+        "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー";
+      let answer = "";
+      let currentGuess = "";
+      let currentRow = 0;
+      let boardGrid = [];
+      let keyLayout = []; // 6x6の文字配置
+      let isGameOver = false;
+
+      // 初期化
+      initGame();
+
+      function initGame() {
+        // 1. 正解をランダムに5文字決定
+        answer = generateSafeAnswer();
+        console.log("正解:", answer);
+
+        // 2. キーボード用の36文字を抽出（正解の文字は必ず含める）
+        let pool = Array.from(new Set(answer.split("")));
+        while (pool.length < 36) {
+          let char = ALL_CHARS[Math.floor(Math.random() * ALL_CHARS.length)];
+          if (!pool.includes(char)) pool.push(char);
+        }
+        keyLayout = pool.sort(() => Math.random() - 0.5);
+
+        // 3. ボード描画
+        const boardEl = document.getElementById("board");
+        for (let i = 0; i < 6; i++) {
+          const row = [];
+          const rowDiv = document.createElement("div");
+          rowDiv.className = "row";
+          for (let j = 0; j < 5; j++) {
+            const tile = document.createElement("div");
+            tile.className = "tile";
+            rowDiv.appendChild(tile);
+            row.push(tile);
+
+            tile.onclick = () => {
+              const char = tile.innerText;
+              if (!char) return;
+
+              const keyElement = document.getElementById(`key-${char}`);
+              if (keyElement) {
+                // 一瞬だけ光らせる演出
+                keyElement.style.transition = "0.2s";
+                keyElement.style.transform = "scale(1.2)";
+                keyElement.style.boxShadow = "0 0 15px white";
+
+                setTimeout(() => {
+                  keyElement.style.transform = "scale(1)";
+                  keyElement.style.boxShadow = "none";
+                }, 300);
+              }
+            };
+          }
+          boardEl.appendChild(rowDiv);
+          boardGrid.push(row);
+        }
+
+        // 4. キーボード描画
+        const keyEl = document.getElementById("keyboard");
+        keyLayout.forEach((char, idx) => {
+          const key = document.createElement("div");
+          key.className = "key";
+          key.id = `key-${char}`;
+          key.innerText = char;
+          key.onclick = () => addChar(char);
+          keyEl.appendChild(key);
+        });
+      }
+
+      function generateSafeAnswer() {
+        const mainChars =
+          "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポ";
+        const specialChars = "ッンー";
+        const yoon = "ャュョ";
+        const iDan = "キシチニヒミリギジヂビピ"; // 拗音の前に来れる文字
+
+        let res = "";
+
+        for (let i = 0; i < 5; i++) {
+          let char = "";
+          let valid = false;
+          let retryCount = 0;
+
+          while (!valid && retryCount < 100) {
+            // 全候補からランダムに選ぶ
+            const pool = mainChars + specialChars + yoon;
+            char = pool[Math.floor(Math.random() * pool.length)];
+            valid = true;
+
+            // ルール1: 1文字目に特殊文字と拗音は禁止
+            if (i === 0 && (specialChars + yoon).includes(char)) valid = false;
+
+            // ルール2: ャュョの前はイ段のみ
+            if (yoon.includes(char)) {
+              const prev = res[i - 1];
+              if (!iDan.includes(prev)) valid = false;
+            }
+
+            // ルール3: ッンーの連続禁止
+            if (specialChars.includes(char)) {
+              const prev = res[i - 1];
+              if (specialChars.includes(prev)) valid = false;
+            }
+
+            // ルール4: 最後の文字が「ッ」は不自然
+            if (i === 4 && char === "ッ") valid = false;
+
+            retryCount++;
+          }
+          res += char;
+        }
+        return res;
+      }
+
+      function addChar(c) {
+        if (isGameOver) return;
+        if (currentGuess.length < 5) {
+          currentGuess += c;
+          updateRow();
+        }
+      }
+
+      function updateRow() {
+        for (let i = 0; i < 5; i++) {
+          boardGrid[currentRow][i].innerText = currentGuess[i] || "";
+        }
+      }
+
+      function submitGuess() {
+        if (currentGuess.length !== 5) return;
+
+        for (let i = 0; i < 5; i++) {
+          const char = currentGuess[i];
+          const target = answer[i];
+          const tile = boardGrid[currentRow][i];
+
+          // --- 判定ロジック ---
+          // キーボード上での座標を取得
+          const gIdx = keyLayout.indexOf(char);
+          const tIdx = keyLayout.indexOf(target);
+          const gPos = { r: Math.floor(gIdx / 6), c: gIdx % 6 };
+          const tPos = { r: Math.floor(tIdx / 6), c: tIdx % 6 };
+
+          // 背景色判定
+          if (char === target) {
+            tile.style.backgroundColor = "#27ae60"; // 緑
+          } else if (answer.includes(char)) {
+            tile.style.backgroundColor = "#f1c40f"; // 黄
+          } else {
+            tile.style.backgroundColor = "#3e3e3e"; // 灰
+          }
+
+          // 枠線判定（行列一致）
+          if (char !== target) {
+            if (gPos.r === tPos.r) {
+              tile.style.border = "4px solid #2980b9"; // 青枠（行一致）
+            } else if (gPos.c === tPos.c) {
+              tile.style.border = "4px solid #c0392b"; // 赤枠（列一致）
+            }
+          }
+
+          // --- タイルの判定のすぐ下に、キーボードの色更新を追加 ---
+          const keyBtn = document.getElementById(`key-${char}`);
+          if (keyBtn) {
+            const currentBg = keyBtn.style.backgroundColor;
+
+            if (char === target) {
+              // 正解（緑）は最優先。一度緑になったら上書きしない
+              keyBtn.style.backgroundColor = "#27ae60";
+              keyBtn.style.color = "white";
+            } else if (answer.includes(char)) {
+              // 黄色にするのは、まだ緑になっていない場合のみ
+              if (currentBg !== "rgb(39, 174, 96)") {
+                keyBtn.style.backgroundColor = "#f1c40f";
+                keyBtn.style.color = "#1a1a1a";
+              }
+            } else {
+              // 灰色（ハズレ）にするのは、まだ緑や黄になっていない場合のみ
+              if (
+                currentBg !== "rgb(39, 174, 96)" &&
+                currentBg !== "rgb(241, 196, 15)"
+              ) {
+                keyBtn.style.backgroundColor = "#333"; // 背景と同じ色に沈ませる
+                keyBtn.style.opacity = "0.3"; // ぐっと薄くして「無い」ことを示す
+              }
+            }
+          }
+        }
+
+        // (判定ループが終わった後...)
+
+        if (currentGuess === answer) {
+          // 成功！
+          isGameOver = true;
+          document.getElementById("reset-btn").style.display = "inline-block";
+          document.getElementById("status").innerText =
+            "【解読成功】古代の英知があなたを認めた！";
+          document.getElementById("status").style.color = "#f1c40f";
+
+          // 現在の行のタイルを全部光らせる
+          boardGrid[currentRow].forEach((tile, idx) => {
+            setTimeout(() => {
+              tile.classList.add("success-tile");
+            }, idx * 100); // 1文字ずつ順番に光る演出
+          });
+        } else {
+          currentRow++;
+          currentGuess = "";
+
+          if (currentRow >= 6) {
+            // 失敗！
+            isGameOver = true;
+            document.getElementById("reset-btn").style.display = "inline-block";
+            document.body.classList.add("shake"); // 画面を揺らす
+            document.getElementById("status").innerText =
+              "【解読失敗】呪文は霧散した...";
+
+            // 正解を赤々と表示
+            const ansDisp =
+              document.getElementById("answer-display") ||
+              document.createElement("div");
+            ansDisp.id = "answer-display";
+            ansDisp.style.display = "block";
+            ansDisp.innerText = `正解：${answer}`;
+            document.getElementById("status").after(ansDisp);
+
+            setTimeout(() => document.body.classList.remove("shake"), 400);
+          } else {
+            updateRow(); // 次の行へ
+          }
+        }
+      }
+
+      function backspace() {
+        if (isGameOver) return;
+        if (currentGuess.length > 0) {
+          currentGuess = currentGuess.slice(0, -1);
+          updateRow();
+        }
+      }
+
+      function resetGame() {
+        // 1. 各種変数のリセット
+        answer = "";
+        currentGuess = "";
+        currentRow = 0;
+        isGameOver = false;
+        boardGrid = [];
+        keyLayout = [];
+
+        // 2. 画面のクリーンアップ
+        document.getElementById("board").innerHTML = "";
+        document.getElementById("keyboard").innerHTML = "";
+        document.getElementById("status").innerText =
+          "石板に触れ、呪文を紡げ...";
+        document.getElementById("status").style.color = "#e0e0e0";
+        document.getElementById("reset-btn").style.display = "none";
+        document.body.classList.remove("shake");
+
+        // 失敗時に出した正解表示があれば消す
+        const ansDisp = document.getElementById("answer-display");
+        if (ansDisp) ansDisp.remove();
+
+        // 3. ゲームの再初期化
+        initGame();
+      }
+    </script>
+  </body>
+</html>

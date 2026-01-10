@@ -36,21 +36,17 @@
       }
       .grid {
         display: grid;
-        grid-template-columns: repeat(4, min(80px, 20vw));
+        grid-template-columns: repeat(4, 80px);
         grid-gap: 12px;
         background: #0f3460;
         padding: 15px;
         border-radius: 12px;
-        max-width: 95vw;
-        box-sizing: border-box;
       }
 
       /* セルの基本設定 */
       .cell {
-        width: 100%;
-        aspect-ratio: 1 / 1;
-        height: auto;
-
+        width: 80px;
+        height: 80px;
         background: var(--cell-color);
         border-radius: 10px;
         display: flex;
@@ -70,7 +66,7 @@
         border: 2px solid #34495e;
       }
       .fraction {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         font-family: "Courier New", monospace;
       }
       .target-val {

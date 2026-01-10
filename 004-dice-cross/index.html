@@ -26,9 +26,6 @@
         user-select: none;
       }
       .panel {
-        width: 100%; /* 横幅を画面いっぱいに */
-        max-width: 500px; /* 大きくなりすぎないように制限 */
-        height: auto;
         background: var(--panel-color);
         padding: 20px;
         border-radius: 12px;
@@ -39,17 +36,21 @@
       }
       .grid {
         display: grid;
-        grid-template-columns: repeat(4, 85px);
+        grid-template-columns: repeat(4, min(85px, 20vw));
         grid-gap: 12px;
         background: #0f3460;
         padding: 15px;
         border-radius: 12px;
+        max-width: 95vw;
+        box-sizing: border-box;
       }
 
       /* セルの基本設定 */
       .cell {
-        width: 85px;
-        height: 85px;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        height: auto;
+
         background: var(--cell-color);
         border-radius: 10px;
         display: flex;

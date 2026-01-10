@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ゲーム置き場</title>
+    <style>
+      :root {
+        --bg-color: #f0f2f5;
+        --card-bg: #ffffff;
+        --text-color: #333;
+        --accent-color: #007aff; /* iPhoneのボタンのような青 */
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        margin: 0;
+        padding: 20px;
+      }
+      h1 {
+        text-align: center;
+        font-size: 1.5rem;
+        margin-bottom: 20px;
+      }
+      /* ゲーム一覧のグリッド設定 */
+      .game-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr); /* スマホで2列 */
+        gap: 15px;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+      /* ゲームカードのデザイン */
+      .game-card {
+        background: var(--card-bg);
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        text-decoration: none;
+        color: inherit;
+        transition: transform 0.2s;
+        display: flex;
+        flex-direction: column;
+      }
+      .game-card:active {
+        transform: scale(0.95); /* タップした時に少し凹む演出 */
+      }
+      /* スクショ部分 */
+      .screenshot {
+        width: 100%;
+        aspect-ratio: 1 / 1; /* 正方形で統一（サイズ違いを吸収） */
+        background-color: #ddd;
+        object-fit: cover;
+      }
+      /* タイトル部分 */
+      .game-info {
+        padding: 10px;
+        text-align: center;
+      }
+      .game-title {
+        font-weight: bold;
+        font-size: 0.9rem;
+        margin: 0;
+      }
+      .game-number {
+        font-size: 0.7rem;
+        color: #888;
+        margin-bottom: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ゲーム一覧</h1>
+
+    <div class="game-grid">
+      <a href="001-tepyorogi/" class="game-card">
+        <img src="images/001.png" alt="Game 001" class="screenshot" />
+        <div class="game-info">
+          <p class="game-number">No.001</p>
+          <p class="game-title">テピョロギ</p>
+        </div>
+      </a>
+
+      <a href="002-foresight-panel/" class="game-card">
+        <img src="images/002.png" alt="Game 002" class="screenshot" />
+        <div class="game-info">
+          <p class="game-number">No.002</p>
+          <p class="game-title">FORΞSIGHT PΛNΞL</p>
+        </div>
+      </a>
+    </div>
+  </body>
+</html>

@@ -1,1 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>太陽と月の均衡</title>
+    <style>
+      body {
+        background: #2a2a5a;
+        color: white;
+        font-family: "Helvetica Neue", Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        padding: 20px;
+      }
+      h2 {
+        margin-bottom: 10px;
+        color: #f1c40f;
+      }
 
+      /* カウンターUI */
+      .dashboard {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+        background: #333;
+        padding: 20px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        min-width: 320px;
+        justify-content: center;
+      }
+      .counter-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transition: all 0.3s ease;
+      }
+      .counter-emoji {
+        transition: font-size 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        height: 60px;
+        display: flex;
+        align-items: center;
+      }
+      .counter-num {
+        font-size: 20px;
+        font-weight: bold;
+        margin-top: 5px;
+      }
+
+      /* グリッドUI */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(5, 60px);
+        gap: 10px;
+        background: #222;
+        padding: 15px;
+        border-radius: 10px;
+      }
+      .cell {
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 30px;
+        border-radius: 12px;
+        cursor: pointer;
+        user-select: none;
+        transition: transform 0.1s, background 0.2s;
+      }
+      .cell:active {
+        transform: scale(0.9);
+      }
+
+      .sun {
+        background: #f39c12;
+        box-shadow: 0 4px #d35400;
+      }
+      .moon {
+        background: #8e44ad;
+        box-shadow: 0 4px #713391;
+      }
+      .moai {
+        background: #7f8c8d;
+        box-shadow: 0 4px #2c3e50;
+      }
+
+      /* 連結状態表示 */
+      .link-status {
+        margin-bottom: 15px;
+        font-size: 18px;
+      }
+      .check {
+        color: #2ecc71;
+        margin: 0 10px;
+      }
+      .uncheck {
+        color: #e74c3c;
+        margin: 0 10px;
+      }
+
+      .success {
+        margin-top: 20px;
+        font-size: 24px;
+        color: #2ecc71;
+        font-weight: bold;
+        animation: pulse 1s infinite;
+        display: none;
+      }
+      @keyframes pulse {
+        0% {
+          opacity: 0.6;
+        }
+        50% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0.6;
+        }
+      }
+
+      button {
+        margin-top: 25px;
+        padding: 10px 20px;
+        border-radius: 5px;
+        border: none;
+        background: #555;
+        color: white;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #777;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>太陽と月の均衡</h2>
+
+    <div class="dashboard">
+      <div id="sun-box" class="counter-item">
+        <div id="sun-icon" class="counter-emoji">☀️</div>
+        <div class="counter-num"><span id="sun-count">0</span></div>
+      </div>
+      <div style="font-size: 24px; opacity: 0.5">vs</div>
+      <div id="moon-box" class="counter-item">
+        <div id="moon-icon" class="counter-emoji">🌙</div>
+        <div class="counter-num"><span id="moon-count">0</span></div>
+      </div>
+    </div>
+
+    <div class="link-status">
+      <span id="stat-sun">☀️ 連結: ❌</span>
+      <span id="stat-moon">🌙 連結: ❌</span>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <div id="success-msg" class="success">✨ 世界の均衡が保たれました ✨</div>
+
+    <button onclick="initGame()">盤面を再生成する</button>
+
+    <script>
+      const SIZE = 5;
+      let grid = []; // 0: sun, 1: moon, 2: moai
+
+      function initGame() {
+        grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+        const mx = Math.floor(Math.random() * SIZE);
+        const my = Math.floor(Math.random() * SIZE);
+        grid[my][mx] = 2; // モアイ
+
+        for (let y = 0; y < SIZE; y++) {
+          for (let x = 0; x < SIZE; x++) {
+            if (grid[y][x] === 2) continue;
+            grid[y][x] = Math.random() > 0.5 ? 0 : 1;
+          }
+        }
+        update();
+      }
+
+      function handleTap(x, y) {
+        // タップした場所がモアイ以外なら、そこも反転対象に含める
+        const targets = [
+          [x, y],
+          [x + 1, y],
+          [x - 1, y],
+          [x, y + 1],
+          [x, y - 1],
+        ];
+        targets.forEach(([tx, ty]) => {
+          if (tx >= 0 && tx < SIZE && ty >= 0 && ty < SIZE) {
+            if (grid[ty][tx] !== 2) {
+              // モアイ自体は不変
+              grid[ty][tx] = grid[ty][tx] === 0 ? 1 : 0;
+            }
+          }
+        });
+        update();
+      }
+
+      // 連結判定ロジック (Flood Fill)
+      function checkConnected(type) {
+        const cells = [];
+        for (let y = 0; y < SIZE; y++) {
+          for (let x = 0; x < SIZE; x++)
+            if (grid[y][x] === type) cells.push([x, y]);
+        }
+        if (cells.length === 0) return false;
+
+        const visited = new Set();
+        const stack = [cells[0]];
+        while (stack.length) {
+          const [cx, cy] = stack.pop();
+          const key = `${cx},${cy}`;
+          if (visited.has(key)) continue;
+          visited.add(key);
+          [
+            [cx + 1, cy],
+            [cx - 1, cy],
+            [cx, cy + 1],
+            [cx, cy - 1],
+          ].forEach(([nx, ny]) => {
+            if (
+              nx >= 0 &&
+              nx < SIZE &&
+              ny >= 0 &&
+              ny < SIZE &&
+              grid[ny][nx] === type
+            ) {
+              stack.push([nx, ny]);
+            }
+          });
+        }
+        return visited.size === cells.length;
+      }
+
+      function update() {
+        let sCount = 0,
+          mCount = 0;
+        const gridEl = document.getElementById("grid");
+        gridEl.innerHTML = "";
+
+        for (let y = 0; y < SIZE; y++) {
+          for (let x = 0; x < SIZE; x++) {
+            const cell = document.createElement("div");
+            cell.className = "cell";
+            if (grid[y][x] === 2) {
+              cell.innerText = "🗿";
+              cell.classList.add("moai");
+            } else if (grid[y][x] === 0) {
+              cell.innerText = "☀️";
+              cell.classList.add("sun");
+              sCount++;
+            } else {
+              cell.innerText = "🌙";
+              cell.classList.add("moon");
+              mCount++;
+            }
+            cell.onclick = () => handleTap(x, y);
+            gridEl.appendChild(cell);
+          }
+        }
+
+        // カウンターとサイズ演出
+        document.getElementById("sun-count").innerText = sCount;
+        document.getElementById("moon-count").innerText = mCount;
+
+        // サイズ計算: 基準30px, 差分1個につき5px変化
+        const sunSize = 30 + (sCount - mCount) * 4;
+        const moonSize = 30 + (mCount - sCount) * 4;
+        document.getElementById("sun-icon").style.fontSize = `${Math.max(
+          10,
+          Math.min(60, sunSize)
+        )}px`;
+        document.getElementById("moon-icon").style.fontSize = `${Math.max(
+          10,
+          Math.min(60, moonSize)
+        )}px`;
+
+        // 連結チェック
+        const sunLinked = checkConnected(0);
+        const moonLinked = checkConnected(1);
+        document.getElementById("stat-sun").innerHTML = `☀️ 連結: ${
+          sunLinked
+            ? '<span class="check">✅</span>'
+            : '<span class="uncheck">❌</span>'
+        }`;
+        document.getElementById("stat-moon").innerHTML = `🌙 連結: ${
+          moonLinked
+            ? '<span class="check">✅</span>'
+            : '<span class="uncheck">❌</span>'
+        }`;
+
+        // 勝利判定
+        if (sCount === 12 && mCount === 12 && sunLinked && moonLinked) {
+          document.getElementById("success-msg").style.display = "block";
+        } else {
+          document.getElementById("success-msg").style.display = "none";
+        }
+      }
+
+      initGame();
+    </script>
+  </body>
+</html>

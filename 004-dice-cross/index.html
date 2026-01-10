@@ -1,1 +1,343 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>賽の十字路</title>
+    <style>
+      :root {
+        --bg-color: #1a1a2e;
+        --panel-color: #16213e;
+        --cell-color: #c9c9d9;
+        --hint-color: #2c3e50;
+        --accent-color: #f1c40f;
+        --die-color: #ffffff;
+      }
+      body {
+        background: var(--bg-color);
+        color: #fff;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+        margin: 0;
+      }
+      .panel {
+        background: var(--panel-color);
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        text-align: center;
+        border: 1px solid #0f3460;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, 85px);
+        grid-gap: 12px;
+        background: #0f3460;
+        padding: 15px;
+        border-radius: 12px;
+      }
 
+      /* セルの基本設定 */
+      .cell {
+        width: 85px;
+        height: 85px;
+        background: var(--cell-color);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        position: relative;
+        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+
+      /* ヒントマスの分数表示 */
+      .cell.hint {
+        background: var(--hint-color);
+        color: #fff;
+        cursor: default;
+        flex-direction: column;
+        border: 2px solid #34495e;
+      }
+      .fraction {
+        font-size: 0.85rem;
+        font-family: "Courier New", monospace;
+      }
+      .target-val {
+        font-size: 1.4rem;
+        font-weight: bold;
+        margin-top: 2px;
+      }
+      .cell.hint.matched {
+        background: #1b4d3e;
+        border-color: var(--accent-color);
+        box-shadow: 0 0 15px var(--accent-color);
+        color: var(--accent-color);
+      }
+      .cell.hint.matched .target-val {
+        color: var(--accent-color);
+      }
+
+      /* サイコロの目のデザイン */
+      .dice-icon {
+        display: grid;
+        grid-template-areas: "a . b" "c d e" "f . g";
+        width: 50px;
+        height: 50px;
+        padding: 5px;
+        background: var(--die-color);
+        border-radius: 8px;
+        box-sizing: border-box;
+        box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2), 0 4px #ccc;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        background: #333;
+        border-radius: 50%;
+        display: none;
+        margin: auto;
+      }
+      .d1 .dot-d {
+        display: block;
+      }
+      .d2 .dot-a,
+      .d2 .dot-g {
+        display: block;
+      }
+      .d3 .dot-a,
+      .d3 .dot-d,
+      .d3 .dot-g {
+        display: block;
+      }
+      .d4 .dot-a,
+      .d4 .dot-b,
+      .d4 .dot-f,
+      .d4 .dot-g {
+        display: block;
+      }
+      .d5 .dot-a,
+      .d5 .dot-b,
+      .d5 .dot-d,
+      .d5 .dot-f,
+      .d5 .dot-g {
+        display: block;
+      }
+      .d6 .dot-a,
+      .d6 .dot-b,
+      .d6 .dot-c,
+      .d6 .dot-e,
+      .d6 .dot-f,
+      .d6 .dot-g {
+        display: block;
+      }
+
+      .hand {
+        display: flex;
+        gap: 15px;
+        margin: 30px 0;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+      }
+      .die-button {
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .die-button:hover {
+        transform: translateY(-5px);
+      }
+      .die-button.used {
+        opacity: 0.1;
+        cursor: default;
+        transform: none;
+        filter: grayscale(1);
+      }
+      .die-button.selected {
+        outline: 3px solid var(--accent-color);
+        outline-offset: 5px;
+        border-radius: 8px;
+      }
+
+      button.main-btn {
+        padding: 12px 30px;
+        border: none;
+        border-radius: 30px;
+        background: #e94560;
+        color: white;
+        cursor: pointer;
+        font-size: 1rem;
+        font-weight: bold;
+        transition: 0.3s;
+      }
+      button.main-btn:hover {
+        background: #ff5e78;
+        transform: scale(1.05);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <div id="status" style="margin-bottom: 5px; font-weight: bold">
+        賽の十字路
+      </div>
+      <div style="font-size: 0.8rem; opacity: 0.7">
+        十字ライン上の合計をヒントに一致させよ
+      </div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <div class="hand" id="hand"></div>
+
+    <button class="main-btn" onclick="handleMainButtonClick()">
+      Reset Grid
+    </button>
+
+    <script>
+      let solution = Array(16).fill(0);
+      let hints = Array(16).fill(null);
+      let playerBoard = Array(16).fill(0);
+      let selectedValue = null;
+
+      function createDiceHTML(value) {
+        if (value === 0) return "";
+        return `
+        <div class="dice-icon d${value}">
+            <div class="dot dot-a" style="grid-area:a"></div><div class="dot dot-b" style="grid-area:b"></div>
+            <div class="dot dot-c" style="grid-area:c"></div><div class="dot dot-d" style="grid-area:d"></div>
+            <div class="dot dot-e" style="grid-area:e"></div><div class="dot dot-f" style="grid-area:f"></div>
+            <div class="dot dot-g" style="grid-area:g"></div>
+        </div>`;
+      }
+
+      function getCrossSum(board, idx) {
+        let sum = 0;
+        let tx = idx % 4,
+          ty = Math.floor(idx / 4);
+        for (let i = 0; i < 16; i++) {
+          let x = i % 4,
+            y = Math.floor(i / 4);
+          if (x === tx || y === ty) sum += board[i];
+        }
+        return sum;
+      }
+
+      let isCleared = false;
+
+      function initGame() {
+        isCleared = false;
+        solution.fill(0);
+        playerBoard.fill(0);
+        hints.fill(null);
+        selectedValue = null;
+        document.getElementById("status").innerText = "賽の十字路";
+
+        let cells = [...Array(16).keys()].sort(() => Math.random() - 0.5);
+        for (let i = 1; i <= 6; i++) solution[cells[i - 1]] = i;
+
+        let emptyCells = [];
+        for (let i = 0; i < 16; i++) if (solution[i] === 0) emptyCells.push(i);
+        emptyCells.sort(() => Math.random() - 0.5);
+        for (let i = 0; i < 4; i++) {
+          let idx = emptyCells[i];
+          hints[idx] = getCrossSum(solution, idx);
+        }
+        render();
+      }
+
+      function handleMainButtonClick() {
+        if (isCleared) {
+          initGame(); // クリア済みなら新しい問題へ
+        } else {
+          // 未クリアならリセット（配置を戻す）
+          playerBoard.fill(0);
+          selectedValue = null;
+          render();
+        }
+      }
+
+      function render() {
+        const grid = document.getElementById("grid");
+        grid.innerHTML = "";
+        for (let i = 0; i < 16; i++) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+
+          if (hints[i] !== null) {
+            cell.classList.add("hint");
+            let current = getCrossSum(playerBoard, i);
+            if (current === hints[i]) cell.classList.add("matched");
+            cell.innerHTML = `<div class="fraction">${current} /</div><div class="target-val">${hints[i]}</div>`;
+          } else {
+            if (playerBoard[i] !== 0) {
+              cell.innerHTML = createDiceHTML(playerBoard[i]);
+              cell.onclick = () => {
+                playerBoard[i] = 0;
+                render();
+              };
+            } else {
+              cell.onclick = () => {
+                if (selectedValue !== null) {
+                  playerBoard[i] = selectedValue;
+                  selectedValue = null;
+                  render();
+                  checkWin();
+                }
+              };
+            }
+          }
+          grid.appendChild(cell);
+        }
+
+        const hand = document.getElementById("hand");
+        hand.innerHTML = "";
+        for (let i = 1; i <= 6; i++) {
+          const btn = document.createElement("div");
+          btn.className = "die-button";
+          if (playerBoard.includes(i)) btn.classList.add("used");
+          else {
+            if (selectedValue === i) btn.classList.add("selected");
+            btn.onclick = () => {
+              selectedValue = i;
+              render();
+            };
+          }
+          btn.innerHTML = createDiceHTML(i);
+          hand.appendChild(btn);
+        }
+
+        const btn = document.querySelector(".main-btn");
+        if (isCleared) {
+          btn.innerText = "Next Sequence";
+          btn.style.background = "#27ae60"; // クリア後は緑色に
+        } else {
+          btn.innerText = "Reset Grid";
+          btn.style.background = "#e94560"; // プレイ中は赤（リセット）
+        }
+      }
+
+      function checkWin() {
+        let usedCount = 0;
+        for (let i = 1; i <= 6; i++) if (playerBoard.includes(i)) usedCount++;
+        if (usedCount === 6) {
+          let correct = true;
+          for (let i = 0; i < 16; i++) {
+            if (hints[i] !== null && getCrossSum(playerBoard, i) !== hints[i])
+              correct = false;
+          }
+          if (correct) {
+            document.getElementById("status").innerText = "お見事！";
+            isCleared = true; // クリアフラグを立てる
+            render(); // ボタンの表示を更新するために再描画
+          }
+        }
+      }
+
+      initGame();
+    </script>
+  </body>
+</html>

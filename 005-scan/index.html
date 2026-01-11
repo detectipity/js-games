@@ -1,1 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>INTERSECT SCAN</title>
+    <style>
+      body {
+        background: #0a0a0c;
+        color: #00ffcc;
+        font-family: sans-serif;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        overflow: hidden;
+        touch-action: manipulation;
+      }
+      canvas {
+        background: #050508;
+        border-bottom: 2px solid #333;
+        width: 100vw;
+        height: 100vw;
+        max-width: 400px;
+        max-height: 400px;
+      }
+      .ui-panel {
+        width: 100%;
+        max-width: 400px;
+        padding: 15px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .status-bar {
+        display: flex;
+        justify-content: space-between;
+        font-family: monospace;
+        font-size: 14px;
+        border-bottom: 1px solid #004433;
+        padding-bottom: 5px;
+      }
+      .slider-box {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-top: 5px;
+      }
+      .slider-box label {
+        font-size: 12px;
+        color: #008877;
+      }
+      input[type="range"] {
+        width: 100%;
+        height: 30px;
+        accent-color: #00ffcc;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      button {
+        flex: 1;
+        padding: 12px;
+        font-weight: bold;
+        font-size: 14px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      #lockBtn {
+        background: #002211;
+        color: #00ffcc;
+        border: 1px solid #00ffcc;
+      }
+      #clearBtn {
+        background: #331100;
+        color: #ff6600;
+        border: 1px solid #ff6600;
+      }
+      #message {
+        position: absolute;
+        top: 420px;
+        width: 80%;
+        text-align: center;
+        background: rgba(0, 0, 0, 0.9);
+        padding: 20px;
+        border: 2px solid #ff3300;
+        display: none;
+        z-index: 10;
+        color: #ff3300;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="message">MISSION FAILED</div>
+    <canvas id="gameCanvas"></canvas>
 
+    <div class="ui-panel">
+      <div class="status-bar">
+        <span>GEMS: <span id="gem-count">0/3</span></span>
+        <span>LIVES: <span id="lives">❤❤❤</span></span>
+      </div>
+
+      <div class="slider-box">
+        <label>POS X</label>
+        <input type="range" id="posX" min="0" max="400" value="200" />
+      </div>
+      <div class="slider-box">
+        <label>ANGLE θ</label>
+        <input type="range" id="angle" min="10" max="170" value="90" />
+      </div>
+
+      <div class="actions">
+        <button id="lockBtn">SCAN LOG</button>
+        <button id="clearBtn">CLEAR ALL LOGS</button>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = 400;
+      canvas.height = 400;
+
+      let gems = [],
+        dummies = [],
+        fixedBeams = [];
+      let scanner = { x: 200, angle: 90 };
+      let lives = 3,
+        gemsFound = 0,
+        isGameOver = false;
+
+      // 距離計算用
+      const getDist = (p1, p2) =>
+        Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+
+      function init() {
+        gems = [];
+        dummies = [];
+        fixedBeams = [];
+        lives = 3;
+        gemsFound = 0;
+        isGameOver = false;
+        document.getElementById("message").style.display = "none";
+
+        // 宝石とダミーを配置（重なり防止）
+        const allObjects = [];
+        const createObject = (type) => {
+          let newObj,
+            attempts = 0;
+          do {
+            newObj = {
+              x: Math.random() * 340 + 30,
+              y: Math.random() * 250 + 30,
+              radius: 10,
+              found: false,
+            };
+            attempts++;
+          } while (
+            allObjects.some((obj) => getDist(newObj, obj) < 50) &&
+            attempts < 100
+          );
+
+          allObjects.push(newObj);
+          if (type === "gem") gems.push(newObj);
+          else dummies.push(newObj);
+        };
+
+        for (let i = 0; i < 3; i++) createObject("gem");
+        for (let i = 0; i < 3; i++) createObject("dummy");
+
+        const targetGem = gems[Math.floor(Math.random() * gems.length)];
+        let specialDummy,
+          attempts = 0;
+        do {
+          specialDummy = {
+            x: targetGem.x, // X座標を宝石と一致させる
+            y: Math.random() * 250 + 30,
+            radius: 10,
+          };
+          attempts++;
+          // 他のすべてのオブジェクト（宝石3つ、ダミー3つ）との距離をチェック
+        } while (
+          allObjects.some((obj) => getDist(specialDummy, obj) < 50) &&
+          attempts < 100
+        );
+
+        if (attempts < 100) {
+          dummies.push(specialDummy);
+          allObjects.push(specialDummy);
+        }
+
+        updateUI();
+      }
+
+      function getBeamPath(startX, startY, angleDeg) {
+        let path = [{ x: startX, y: startY }];
+        let cx = startX,
+          cy = startY;
+        // アングルを左右反転: (180 - angleDeg)
+        let rad = ((180 - angleDeg) * Math.PI) / 180;
+        let vx = Math.cos(rad),
+          vy = -Math.sin(rad);
+        let dist = 1000;
+        for (let b = 0; b < 3; b++) {
+          let tx = vx > 0 ? (400 - cx) / vx : (0 - cx) / vx;
+          let ty = vy > 0 ? (400 - cy) / vy : (0 - cy) / vy;
+          let t = Math.min(tx, ty, dist);
+          cx += vx * t;
+          cy += vy * t;
+          dist -= t;
+          path.push({ x: cx, y: cy });
+          if (dist <= 0) break;
+          if (tx < ty) vx *= -1;
+          else vy *= -1;
+        }
+        return path;
+      }
+
+      function checkHit(p1, p2, target) {
+        const dx = p2.x - p1.x,
+          dy = p2.y - p1.y,
+          l2 = dx * dx + dy * dy;
+        if (l2 === 0) return Infinity;
+        let t = Math.max(
+          0,
+          Math.min(1, ((target.x - p1.x) * dx + (target.y - p1.y) * dy) / l2)
+        );
+        return Math.sqrt(
+          (target.x - (p1.x + t * dx)) ** 2 + (target.y - (p1.y + t * dy)) ** 2
+        );
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, 400, 400);
+
+        // 1. 土の地層グラデーション
+        let grad = ctx.createLinearGradient(0, 0, 0, 400);
+        grad.addColorStop(0, "#5d4037"); // 上部は明るい土
+        grad.addColorStop(1, "#2d1b15"); // 下部は深い土
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 400, 400);
+
+        // 2. 砂の粒々（ノイズ）を描画
+        ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+        for (let i = 0; i < 500; i++) {
+          ctx.fillRect(Math.random() * 400, Math.random() * 400, 1, 1);
+        }
+
+        fixedBeams.forEach((b) => {
+          ctx.strokeStyle = "rgba(0, 255, 200, 0.15)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(b[0].x, b[0].y);
+          for (let i = 1; i < b.length; i++) ctx.lineTo(b[i].x, b[i].y);
+          ctx.stroke();
+        });
+
+        const path = getBeamPath(scanner.x, 395, scanner.angle);
+        let gemHit = false,
+          dummyHit = false;
+
+        // レーダー判定（判定を3pxに縮小）
+        const radarPrecision = 3;
+        gems.forEach((g) => {
+          for (let i = 0; i < path.length - 1; i++)
+            if (checkHit(path[i], path[i + 1], g) < radarPrecision)
+              gemHit = true;
+        });
+        dummies.forEach((d) => {
+          for (let i = 0; i < path.length - 1; i++)
+            if (checkHit(path[i], path[i + 1], d) < radarPrecision)
+              dummyHit = true;
+        });
+
+        ctx.strokeStyle = dummyHit ? "#ffff00" : gemHit ? "#ff3300" : "#00ffcc";
+        ctx.lineWidth = dummyHit || gemHit ? 4 : 2;
+        ctx.beginPath();
+        ctx.moveTo(path[0].x, path[0].y);
+        for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+        ctx.stroke();
+
+        gems.forEach((g) => {
+          if (g.found || isGameOver) {
+            ctx.font = "30px serif"; // サイズ指定
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("💎", g.x, g.y); // 指定した座標に描画
+          }
+        });
+        if (isGameOver) {
+          dummies.forEach((d) => {
+            ctx.font = "30px serif"; // サイズ指定
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("💣", d.x, d.y); // 指定した座標に描画
+          });
+        }
+
+        ctx.fillStyle = "#00ffcc";
+        ctx.fillRect(scanner.x - 10, 390, 20, 10);
+        requestAnimationFrame(draw);
+      }
+
+      function handleInput(e) {
+        if (isGameOver) {
+          init();
+          return;
+        }
+        if (e.type === "touchstart") e.preventDefault();
+
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const mx = (clientX - rect.left) * (400 / rect.width);
+        const my = (clientY - rect.top) * (400 / rect.height);
+
+        let found = false,
+          hitDummy = false;
+        // タッチ判定は広め(30px)
+        gems.forEach((g) => {
+          if (!g.found && Math.sqrt((g.x - mx) ** 2 + (g.y - my) ** 2) < 30) {
+            g.found = true;
+            found = true;
+            gemsFound++;
+          }
+        });
+
+        if (!found) {
+          dummies.forEach((d) => {
+            if (Math.sqrt((d.x - mx) ** 2 + (d.y - my) ** 2) < 30)
+              hitDummy = true;
+          });
+
+          // ダミーもライフ1消費
+          lives--;
+          if (lives <= 0)
+            endGame(hitDummy ? "DUMMY DETONATED" : "ENERGY DEPLETED");
+        }
+        updateUI();
+      }
+
+      function endGame(msg) {
+        isGameOver = true;
+        const el = document.getElementById("message");
+        el.innerHTML = `MISSION FAILED<br>${msg}<br><span style='font-size:12px'>TAP TO RESTART</span>`;
+        el.style.display = "block";
+      }
+
+      function updateUI() {
+        document.getElementById("gem-count").innerText = `${gemsFound}/3`;
+        document.getElementById("lives").innerText = "❤".repeat(
+          Math.max(0, lives)
+        );
+        if (gemsFound >= 3) {
+          isGameOver = true;
+          const el = document.getElementById("message");
+          el.style.color = "#00ffcc";
+          el.style.borderColor = "#00ffcc";
+          el.innerHTML = `MISSION COMPLETE<br>ALL GEMS RECOVERED<br><span style='font-size:12px'>TAP TO RESTART</span>`;
+          el.style.display = "block";
+        }
+      }
+
+      canvas.addEventListener("mousedown", handleInput);
+      canvas.addEventListener("touchstart", handleInput, { passive: false });
+      document.getElementById("posX").oninput = (e) =>
+        (scanner.x = parseInt(e.target.value));
+      document.getElementById("angle").oninput = (e) =>
+        (scanner.angle = parseInt(e.target.value));
+      document.getElementById("lockBtn").onclick = () =>
+        fixedBeams.push(getBeamPath(scanner.x, 395, scanner.angle));
+      document.getElementById("clearBtn").onclick = () => (fixedBeams = []);
+
+      init();
+      draw();
+    </script>
+  </body>
+</html>

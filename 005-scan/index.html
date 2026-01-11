@@ -56,7 +56,7 @@
       }
       input[type="range"] {
         width: 100%;
-        height: 30px;
+        height: 40px;
         accent-color: #00ffcc;
       }
       .actions {
@@ -311,6 +311,7 @@
       function handleInput(e) {
         if (isGameOver) {
           init();
+          e.preventDefault();
           return;
         }
         if (e.type === "touchstart") e.preventDefault();

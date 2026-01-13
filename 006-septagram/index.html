@@ -1,1 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>セプタグラム・ソリティア</title>
+    <style>
+      body {
+        background: #020205;
+        color: #fff;
+        font-family: sans-serif;
+        margin: 0;
+        overflow: hidden;
+        touch-action: none;
+      }
+      canvas {
+        display: block;
+      }
+      #ui {
+        position: absolute;
+        top: 20px;
+        width: 100%;
+        text-align: center;
+        pointer-events: none;
+      }
+      .info {
+        font-size: 1.2rem;
+        font-weight: bold;
+        letter-spacing: 2px;
+      }
+      .sub {
+        font-size: 0.9rem;
+        color: #888;
+        margin-top: 5px;
+      }
+      #clear-msg {
+        position: absolute;
+        top: 50%;
+        width: 100%;
+        text-align: center;
+        font-size: 3rem;
+        font-weight: bold;
+        color: #fff;
+        text-shadow: 0 0 20px #fff;
+        pointer-events: none;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui">
+      <div class="info" id="status">UNISON: 0 / 14</div>
+      <div class="sub" id="moves">MOVES LEFT: 0</div>
+    </div>
+    <div id="clear-msg">HARMONY</div>
+    <canvas id="canvas"></canvas>
 
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      const NUM_NODES = 7;
+      const SCRAMBLE_STEPS = 5;
+      const EXTRA_MOVES = 2;
+      let playerMoves = SCRAMBLE_STEPS + EXTRA_MOVES;
+      let isCleared = false;
+
+      let nodes = [],
+        segments = [],
+        lines = [];
+      let isDragging = false;
+      let dragStart = { x: 0, y: 0 },
+        dragEnd = { x: 0, y: 0 };
+
+      function init() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        nodes = [];
+        segments = [];
+        lines = [];
+        playerMoves = SCRAMBLE_STEPS + EXTRA_MOVES;
+        isCleared = false;
+        document.getElementById("clear-msg").style.display = "none";
+
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = Math.min(canvas.width, canvas.height) * 0.35;
+
+        for (let i = 0; i < NUM_NODES; i++) {
+          const angle = (i / NUM_NODES) * Math.PI * 2 - Math.PI / 2;
+          nodes.push({
+            x: centerX + Math.cos(angle) * radius,
+            y: centerY + Math.sin(angle) * radius,
+          });
+        }
+
+        // 14本の弦（Line）の定義
+        let lineIdx = 0;
+        for (let i = 0; i < NUM_NODES; i++) {
+          for (let j = i + 2; j < NUM_NODES; j++) {
+            if (i === 0 && j === NUM_NODES - 1) continue;
+            lines.push({
+              id: lineIdx++,
+              a: nodes[i],
+              b: nodes[j],
+              isUnity: false,
+            });
+          }
+        }
+
+        // セグメント分割
+        lines.forEach((line) => {
+          let rand = Math.random() > 0.5 ? true : false;
+          let pts = [
+            { x: line.a.x, y: line.a.y, t: 0 },
+            { x: line.b.x, y: line.b.y, t: 1 },
+          ];
+          lines.forEach((other) => {
+            if (line.id === other.id) return;
+            const intersect = getIntersection(line.a, line.b, other.a, other.b);
+            if (intersect) pts.push(intersect);
+          });
+          pts.sort((a, b) => a.t - b.t);
+
+          for (let i = 0; i < pts.length - 1; i++) {
+            segments.push({
+              lineId: line.id,
+              p1: pts[i],
+              p2: pts[i + 1],
+              active: rand,
+              vibration: 20,
+            });
+          }
+        });
+
+        scramble();
+      }
+
+      function scramble() {
+        for (let i = 0; i < SCRAMBLE_STEPS; i++) {
+          const s = {
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+          };
+          const e = {
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+          };
+          toggleSegments(s, e, false);
+        }
+      }
+
+      function toggleSegments(p1, p2, isPlayer) {
+        let hit = false;
+        segments.forEach((seg) => {
+          if (intersectSimple(p1, p2, seg.p1, seg.p2)) {
+            seg.active = !seg.active;
+            seg.vibration = 20;
+            hit = true;
+          }
+        });
+        if (isPlayer && hit) playerMoves--;
+      }
+
+      function getIntersection(p1, p2, p3, p4) {
+        const s1 =
+          (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x);
+        const s2 =
+          (p2.x - p1.x) * (p4.y - p1.y) - (p2.y - p1.y) * (p4.x - p1.x);
+        const s3 =
+          (p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x);
+        const s4 =
+          (p4.x - p3.x) * (p2.y - p3.y) - (p4.y - p3.y) * (p2.x - p3.x);
+        if (s1 * s2 < 0 && s3 * s4 < 0) {
+          return {
+            x: p1.x + (s3 / (s3 - s4)) * (p2.x - p1.x),
+            y: p1.y + (s3 / (s3 - s4)) * (p2.y - p1.y),
+            t: s3 / (s3 - s4),
+          };
+        }
+        return null;
+      }
+
+      function intersectSimple(p1, p2, p3, p4) {
+        const ccw = (a, b, c) =>
+          (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
+        return (
+          ccw(p1, p3, p4) !== ccw(p2, p3, p4) &&
+          ccw(p1, p2, p3) !== ccw(p1, p2, p4)
+        );
+      }
+
+      function update() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // ユニティ判定（弦ごとに色が揃っているか）
+        let unityCount = 0;
+        lines.forEach((line) => {
+          const lineSegs = segments.filter((s) => s.lineId === line.id);
+          const firstState = lineSegs[0].active;
+          line.isUnity = lineSegs.every((s) => s.active === firstState);
+          if (line.isUnity) unityCount++;
+        });
+
+        if (unityCount === lines.length && !isCleared) {
+          isCleared = true;
+          document.getElementById("clear-msg").style.display = "block";
+        }
+
+        document.getElementById(
+          "status"
+        ).innerText = `UNISON: ${unityCount} / 14`;
+        document.getElementById("moves").innerText = isCleared
+          ? "EXCELLENT"
+          : `MOVES LEFT: ${playerMoves}`;
+
+        // セグメント描画
+        segments.forEach((seg) => {
+          seg.vibration *= 0.88;
+          const v = Math.sin(Date.now() * 0.15) * seg.vibration;
+          const line = lines[seg.lineId];
+
+          ctx.strokeStyle = seg.active ? "#00d4ff" : "#ff3300";
+          ctx.lineWidth = line.isUnity ? 5 : 2;
+
+          if (line.isUnity) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = seg.active ? "#00d4ff" : "#ff3300";
+          } else {
+            ctx.shadowBlur = 0;
+          }
+
+          ctx.beginPath();
+          ctx.moveTo(seg.p1.x + v, seg.p1.y + v);
+          ctx.lineTo(seg.p2.x + v, seg.p2.y + v);
+          ctx.stroke();
+        });
+        ctx.shadowBlur = 0;
+
+        // ノード描画
+        nodes.forEach((n) => {
+          ctx.fillStyle = "#fff";
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        if (isDragging) {
+          ctx.strokeStyle = "rgba(255,255,255,0.4)";
+          ctx.beginPath();
+          ctx.moveTo(dragStart.x, dragStart.y);
+          ctx.lineTo(dragEnd.x, dragEnd.y);
+          ctx.stroke();
+        }
+        requestAnimationFrame(update);
+      }
+
+      canvas.addEventListener("pointerdown", (e) => {
+        if (isCleared || playerMoves <= 0) {
+          init();
+          return;
+        }
+        isDragging = true;
+        const rect = canvas.getBoundingClientRect();
+        dragStart = {
+          x: (e.touches ? e.touches[0].clientX : e.clientX) - rect.left,
+          y: (e.touches ? e.touches[0].clientY : e.clientY) - rect.top,
+        };
+        dragEnd = dragStart;
+      });
+      canvas.addEventListener("pointermove", (e) => {
+        if (!isDragging) return;
+        const rect = canvas.getBoundingClientRect();
+        dragEnd = {
+          x: (e.touches ? e.touches[0].clientX : e.clientX) - rect.left,
+          y: (e.touches ? e.touches[0].clientY : e.clientY) - rect.top,
+        };
+      });
+      canvas.addEventListener("pointerup", () => {
+        if (isDragging) toggleSegments(dragStart, dragEnd, true);
+        isDragging = false;
+      });
+
+      init();
+      update();
+      window.addEventListener("resize", init);
+    </script>
+  </body>
+</html>

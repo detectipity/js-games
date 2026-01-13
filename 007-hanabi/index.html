@@ -1,1 +1,511 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>HANABI SNIPER</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: #020205;
+        font-family: "Courier New", monospace;
+        touch-action: none;
+        color: #fff;
+      }
+      canvas {
+        display: block;
+        width: 400px;
+        height: 600px;
+        background: #000;
+      }
+      #full-ui {
+        position: absolute;
+        width: 100%;
+        max-width: 400px;
+        display: flex;
+        flex-direction: column;
+        pointer-events: none;
+        text-align: center;
+      }
+      #ui {
+        position: absolute;
+        top: 10px;
+        width: 100%;
+        max-width: 400px;
+        display: flex;
+        flex-direction: column;
+        pointer-events: none;
+        text-align: center;
+      }
+      #hp-bar-bg {
+        width: 80%;
+        height: 12px;
+        background: #222;
+        margin: 10px auto;
+        border: 2px solid #fff;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      #hp-bar-fill {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, #f00, #ff0);
+        transition: width 0.1s;
+      }
+      #my-hp-fill {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, #0f0, #0ff);
+        transition: width 0.1s;
+      }
+      #footer-ui {
+        position: absolute;
+        top: 558px;
+        width: 100%;
+        max-width: 400px;
+        display: flex;
+        flex-direction: column;
+        pointer-events: none;
+        text-align: center;
+      }
+      .info {
+        display: flex;
+        justify-content: space-around;
+        font-size: 20px;
+        font-weight: bold;
+        text-shadow: 2px 2px #000;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="full-ui" style="display: none">
+      <div id="ui">
+        <div id="hp-bar-bg"><div id="hp-bar-fill"></div></div>
+        <div class="info">
+          <div>Lv.<span id="lv">1</span></div>
+          <div>SHOTS: <span id="ammo">10</span></div>
+        </div>
+      </div>
+      <div id="footer-ui">
+        <div id="hp-bar-bg"><div id="my-hp-fill"></div></div>
+      </div>
+    </div>
+    <canvas id="canvas"></canvas>
 
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      const ammoEl = document.getElementById("ammo");
+      const lvEl = document.getElementById("lv");
+      const hpFill = document.getElementById("hp-bar-fill");
+      const hpMeFill = document.getElementById("my-hp-fill");
+
+      let width,
+        height,
+        ammo = 10,
+        level = 1,
+        loopCount = 0;
+      let boss = { x: 0, y: 150, hp: 5000, maxHp: 5000, timer: 0 };
+      let me = { hp: 1000, maxHp: 1000 };
+      let wall = { x: 0, y: 0, w: 200, h: 20, timer: 0 };
+      let rocket = null,
+        particles = [];
+      bullets = [];
+      let rocketSpeed = -8;
+      let isPressing = false,
+        startX = 0;
+      let gameState = "title";
+
+      function init() {
+        width = canvas.width = 400;
+        height = canvas.height = 600;
+        wall.y = height / 2;
+        resetLevel();
+      }
+
+      function resetLevel() {
+        ctx.fillStyle = "#02020a";
+        ctx.fillRect(0, 0, width, height);
+        boss.maxHp = 5000;
+        boss.hp = boss.maxHp;
+        me.maxHp = 1000;
+        me.hp = me.maxHp;
+        ammo = 10;
+        boss.timer = 0;
+        particles = [];
+        bullets = [];
+        updateUI();
+      }
+
+      function updateUI() {
+        ammoEl.innerText = ammo;
+        lvEl.innerText = loopCount * 5 + level;
+        hpFill.style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + "%";
+        hpMeFill.style.width = Math.max(0, (me.hp / me.maxHp) * 100) + "%";
+      }
+
+      class Particle {
+        constructor(x, y, vx, vy, color) {
+          this.x = x;
+          this.y = y;
+          this.color = color;
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 6 + 2;
+          this.vx = Math.cos(angle) * speed + vx * 0.3;
+          this.vy = Math.sin(angle) * speed + vy * 0.3;
+          this.alpha = 1;
+        }
+        update() {
+          this.x += this.vx;
+          this.y += this.vy;
+          this.vx *= 0.97;
+          this.vy *= 0.97;
+          this.vy += 0.05;
+          this.alpha -= 0.015;
+        }
+      }
+
+      class Bullet {
+        constructor(x, y, vy, color, isEnemy) {
+          this.x = x;
+          this.y = y;
+          this.vy = vy;
+          this.color = color;
+          this.isEnemy = isEnemy;
+        }
+        update() {
+          this.y += this.vy;
+        }
+      }
+
+      // パーティクルの描画と更新だけを行う補助関数
+      function updateParticlesOnly() {
+        particles = particles.filter((p) => {
+          p.update();
+          ctx.globalAlpha = p.alpha;
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x, p.y, 2, 2);
+          return p.alpha > 0;
+        });
+        ctx.globalAlpha = 1;
+      }
+
+      function loop() {
+        // 背景の塗りつぶし (0.5に強化して跡をスッキリさせる)
+        ctx.fillStyle = "rgba(2, 2, 10, 0.5)";
+        ctx.fillRect(0, 0, width, height);
+
+        if (gameState !== "play") {
+          if (gameState === "title") {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = "white";
+            ctx.fillStyle =
+              "rgba(255, 255, 255, " +
+              (0.5 + Math.sin(Date.now() * 0.002) * 0.5) +
+              ")";
+
+            ctx.textAlign = "center";
+            ctx.font = "bold 40px sans-serif";
+            ctx.fillText("HANABI SNIPER", width / 2, height / 2);
+            ctx.font = "20px sans-serif";
+            ctx.fillText("TAP TO LAUNCH", width / 2, height / 2 + 150);
+
+            ctx.shadowBlur = 0;
+          }
+          if (gameState === "win") {
+            const t = Date.now() * 0.005; // 明滅用のタイマー
+            const goldGrad = ctx.createLinearGradient(
+              0,
+              height / 2 - 20,
+              0,
+              height / 2 + 20
+            );
+            goldGrad.addColorStop(0, "#D4AF37"); // 真鍮色
+            goldGrad.addColorStop(0.5, "#FFF5CC"); // 輝き
+            goldGrad.addColorStop(1, "#CF9F12"); // 深みのある金
+
+            ctx.textAlign = "center";
+            ctx.shadowBlur = 15 + Math.sin(t * 2) * 5; // ぼんやりと光が強弱する
+            ctx.shadowColor = "#FFD700";
+            ctx.fillStyle = goldGrad;
+            ctx.font = "italic bold 45px 'Georgia', serif"; // 少し高級感のあるフォント
+            ctx.fillText("LEVEL CLEAR!", width / 2, height / 2);
+
+            ctx.shadowBlur = 0;
+          }
+          if (gameState === "lose") {
+            const t = Date.now() * 0.01;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = "rgba(0, 255, 255, 0.5)";
+
+            ctx.textAlign = "center";
+            ctx.font = "bold 40px sans-serif";
+            ctx.fillStyle = "rgba(150, 200, 255, 0.8)";
+            ctx.fillText("GAME OVER", width / 2 + Math.cos(t) * 2, height / 2);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+            ctx.fillText("GAME OVER", width / 2, height / 2);
+
+            ctx.shadowBlur = 0;
+          }
+
+          // 撃破後の余韻として火花だけは動かし続ける
+          updateParticlesOnly();
+          requestAnimationFrame(loop);
+          return;
+        }
+
+        // 1. 壁の移動 (中層)
+        wall.timer += 0.02;
+        wall.x = width / 2 + Math.sin(wall.timer * 1.2) * (width / 3);
+
+        // ネオン発光エフェクト
+        ctx.save();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#0ff"; // 水色の発光
+        ctx.strokeStyle = "#0ff";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(wall.x - wall.w / 2, wall.y, wall.w, wall.h);
+
+        // 内側のスキャンライン（縞々）
+        ctx.fillStyle = "rgba(0, 255, 255, 0.2)";
+        ctx.fillRect(wall.x - wall.w / 2, wall.y, wall.w, wall.h);
+        ctx.beginPath();
+        for (let i = 0; i < wall.h; i += 4) {
+          ctx.moveTo(wall.x - wall.w / 2, wall.y + i);
+          ctx.lineTo(wall.x + wall.w / 2, wall.y + i);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // 2. ボスの移動
+        boss.timer += 0.02 * (1 + loopCount * 0.5);
+        let targetX = width / 2,
+          targetY = 200; // 基本の高さ
+
+        switch (level) {
+          case 1:
+            targetX += Math.sin(boss.timer) * (width / 5);
+            break;
+          case 2:
+            targetX += Math.sin(boss.timer) * (width / 3);
+            break;
+          case 3:
+            targetX += Math.cos(boss.timer) * 80;
+            targetY += Math.sin(boss.timer) * 80;
+            break;
+          case 4:
+            targetX += Math.sin(boss.timer) * (width / 3);
+            targetY += Math.cos(boss.timer * 1.5) * 60;
+            break;
+          case 5:
+            targetX += Math.sin(boss.timer * 3) * (width / 3);
+            targetY += Math.cos(boss.timer * 2) * 80;
+            break;
+          case 6:
+            targetX +=
+              Math.sin(boss.timer * 1.7) * 100 +
+              Math.sin(boss.timer * 3.1) * 50;
+            targetY +=
+              Math.cos(boss.timer * 1.3) * 60 + Math.sin(boss.timer * 2.5) * 40;
+            break;
+          case 7:
+            let sx = Math.sin(boss.timer * 3);
+            targetX +=
+              (sx > 0 ? 1 : -1) * Math.pow(Math.abs(sx), 0.5) * (width / 3);
+            targetY += Math.cos(boss.timer * 1.1) * 70;
+            break;
+          case 8:
+            targetX +=
+              Math.sin(boss.timer + Math.sin(boss.timer * 5)) * (width / 2.5);
+            targetY +=
+              Math.cos(boss.timer * 0.7 + Math.cos(boss.timer * 1.5)) * 80;
+            break;
+        }
+
+        if (boss.hitFlash > 0) {
+          boss.hitFlash--; // フレームごとに減らす
+        }
+
+        boss.x = targetX;
+        boss.y = targetY;
+
+        ctx.font = "80px sans-serif";
+        ctx.textAlign = "center";
+        // 被弾中は少し震えさせる演出
+        let bx = boss.x + (boss.hitFlash > 0 ? (Math.random() - 0.5) * 10 : 0);
+        ctx.fillText("👾", bx, boss.y);
+
+        if (Math.random() < 0.1) {
+          bullets.push(new Bullet(boss.x, boss.y, 10, "#f0f", true)); // 敵弾
+        }
+
+        // 3. ロケット更新
+        if (rocket) {
+          rocket.x += rocket.vx;
+          rocket.y += rocket.vy;
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(rocket.x - 2, rocket.y, 4, 12);
+          if (
+            rocket.y > wall.y &&
+            rocket.y < wall.y + wall.h &&
+            Math.abs(rocket.x - wall.x) < wall.w / 2
+          )
+            rocket = null;
+          else if (rocket.y < 0) rocket = null;
+        }
+
+        // 4. 花火 (判定＋描画) ★ダメージ減衰ロジック
+        particles = particles.filter((p) => {
+          p.update();
+          const d = Math.hypot(p.x - boss.x, p.y - (boss.y - 20));
+
+          if (d < 50) {
+            // ★ 威力減衰：透明度(alpha)が高いほどダメージ大。1.5をベースに調整
+            // 爆発したてなら1.5、消えかかり(0.1)なら0.15ダメージ
+            boss.hp -= 1.5 * p.alpha;
+            boss.hitFlash = 3;
+            updateUI();
+          }
+
+          ctx.globalAlpha = p.alpha;
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x, p.y, 3, 3);
+          return p.alpha > 0;
+        });
+        ctx.globalAlpha = 1;
+
+        // 5. 弾丸(Bullet)判定
+        bullets = bullets.filter((b) => {
+          b.update();
+          ctx.fillStyle = b.color;
+          ctx.fillRect(b.x - 2, b.y, 4, 8);
+
+          // 壁で遮断
+          if (
+            b.y > wall.y &&
+            b.y < wall.y + wall.h &&
+            Math.abs(b.x - wall.x) < wall.w / 2
+          )
+            return false;
+
+          if (b.isEnemy && b.y > height - 10) {
+            me.hp -= 5;
+            updateUI();
+            return false;
+          }
+          return b.y > 0 && b.y < height;
+        });
+
+        // 勝利判定
+        if (boss.hp <= 0 && gameState === "play") {
+          gameState = "win";
+
+          // 次のレベルへの準備
+          setTimeout(() => {
+            level++; // レベルを上げる
+
+            // 5レベルごとに周回（ループ）処理
+            if (level > 8) {
+              level = 4;
+              loopCount++;
+              rocketSpeed -= 1.5; // ロケットを速くする
+            }
+
+            resetLevel(); // HPや弾数をリセット
+            gameState = "play"; // ゲーム再開
+          }, 2000);
+        }
+        // 敗北判定
+        else if (
+          (ammo <= 0 || me.hp <= 0) &&
+          !rocket &&
+          particles.length === 0 &&
+          boss.hp > 0 &&
+          gameState === "play"
+        ) {
+          gameState = "lose";
+
+          setTimeout(() => {
+            level = 1;
+            loopCount = 0;
+            rocketSpeed = -8;
+            resetLevel();
+            const fullUI = document.getElementById("full-ui");
+            fullUI.style.display = "none";
+            gameState = "title";
+          }, 3000);
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      function getCanvasX(e) {
+        const pos = e.touches ? e.touches[0] : e;
+        const rect = canvas.getBoundingClientRect(); // キャンバスの画面上の位置とサイズを取得
+
+        // (マウスの画面上の位置 - キャンバスの左端) × (内部の解像度 / 画面上の表示幅)
+        const scaleX = canvas.width / rect.width;
+        return (pos.clientX - rect.left) * scaleX;
+      }
+
+      function start(e) {
+        if (gameState === "title") {
+          const fullUI = document.getElementById("full-ui");
+          fullUI.style.display = "block";
+          gameState = "play";
+          return;
+        }
+        if (gameState !== "play" || rocket || ammo <= 0) return;
+        const pos = e.touches ? e.touches[0] : e;
+        isPressing = true;
+        startX = getCanvasX(e);
+        rocket = {
+          x: startX,
+          y: height,
+          vx: 0,
+          vy: rocketSpeed,
+          color: `hsl(${Math.random() * 360},100%,70%)`,
+        };
+        ammo--;
+        updateUI();
+      }
+      function move(e) {
+        if (!isPressing || !rocket) return;
+        const pos = e.touches ? e.touches[0] : e;
+        rocket.vx = (getCanvasX(e) - startX) * 0.1;
+      }
+      function end() {
+        if (isPressing && rocket) {
+          for (let i = 0; i < 100; i++)
+            particles.push(
+              new Particle(
+                rocket.x,
+                rocket.y,
+                rocket.vx,
+                rocket.vy,
+                rocket.color
+              )
+            );
+          rocket = null;
+        }
+        isPressing = false;
+      }
+
+      window.addEventListener("mousedown", start);
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", end);
+      window.addEventListener("touchstart", start, { passive: false });
+      window.addEventListener("touchmove", move, { passive: false });
+      window.addEventListener("touchend", end, { passive: false });
+      init();
+      loop();
+    </script>
+  </body>
+</html>

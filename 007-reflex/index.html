@@ -10,7 +10,7 @@
     <style>
       :root {
         --bg-color: #0a0a1a;
-        --panel-color: #1a1a3a;
+        --panel-color: #2a2a4a;
         --active-color: #00f2ff;
       }
       body {
@@ -266,7 +266,7 @@
         panels.forEach((p) => p.classList.remove("active"));
 
         // 鏡の種類 (実線 or 点線フェイク)
-        mirrorType = Math.random() < 0.75 ? "real" : "fake";
+        mirrorType = Math.random() < 0.85 ? "real" : "fake";
 
         let valid = false;
         let attempt = 0;

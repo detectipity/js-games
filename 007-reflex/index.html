@@ -126,6 +126,16 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+        opacity: 1;
+        visibility: visible;
+      }
+      .fade-out {
+        opacity: 0;
+        transform: scale(
+          1.1
+        ); /* 少し大きくしながら消えると吸い込まれるような演出に */
+        pointer-events: none; /* 即座にタップを無効化 */
       }
       #logo-container {
         position: relative;
@@ -387,18 +397,38 @@
       let isInputLocked = false;
 
       function startGame() {
-        gameState = "PLAYING";
+        if (gameState !== "TITLE") return;
+
+        const title = document.getElementById("title-screen");
+        title.classList.add("fade-out"); // フェードアウト開始
+
+        // アニメーション中の誤タップを防ぐガード
         isInputLocked = true;
-        score = 0;
-        level = 1;
-        timeLeft = 100;
-        // タイトルUIを隠してゲームUIを表示
-        document.getElementById("title-screen").style.display = "none";
-        initProblem();
-        gameLoop();
+
+        // 0.4秒（CSSのtransition時間）待ってから完全に消してゲーム開始
         setTimeout(() => {
-          isInputLocked = false;
-        }, 3000);
+          title.style.display = "none";
+          gameState = "PLAYING";
+          isInputLocked = false; // ガード解除
+
+          score = 0;
+          level = 1;
+          timeLeft = 100;
+          initProblem();
+          gameLoop();
+        }, 400);
+        // gameState = "PLAYING";
+        // isInputLocked = true;
+        // score = 0;
+        // level = 1;
+        // timeLeft = 100;
+        // // タイトルUIを隠してゲームUIを表示
+        // document.getElementById("title-screen").style.display = "none";
+        // initProblem();
+        // gameLoop();
+        // setTimeout(() => {
+        //   isInputLocked = false;
+        // }, 3000);
       }
 
       function gameOver() {

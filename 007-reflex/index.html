@@ -366,9 +366,7 @@
       }
 
       function handleTap(idx) {
-        if (document.getElementById("title-screen").style.display !== "none")
-          return;
-        if (gameState !== "PLAYING") return;
+        if (isInputLocked || gameState !== "PLAYING") return;
         if (idx === currentTarget) {
           const panel = panels[idx];
           panel.classList.add("flash");
@@ -386,16 +384,21 @@
         scoreElement.innerText = `FLOOR: ${score}`;
       }
 
+      let isInputLocked = false;
+
       function startGame() {
-        gameState = "STARTING";
+        gameState = "PLAYING";
+        isInputLocked = true;
         score = 0;
         level = 1;
         timeLeft = 100;
         // タイトルUIを隠してゲームUIを表示
         document.getElementById("title-screen").style.display = "none";
-        setTimeout(() => (gameState = "PLAYING"), 100);
         initProblem();
         gameLoop();
+        setTimeout(() => {
+          isInputLocked = false;
+        }, 300);
       }
 
       function gameOver() {

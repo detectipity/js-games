@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=no"
     />
-    <title>ジャイロ・リフレックス</title>
+    <title>ジャイロ・リフレクス</title>
     <style>
       :root {
         --bg-color: #0a0a1a;
@@ -186,9 +186,9 @@
   <body>
     <div id="title-screen">
       <div id="logo-container">
-        <div class="logo-text reflected">ジャイロ<br />リフレックス</div>
+        <div class="logo-text reflected">ジャイロ<br />リフレクス</div>
         <div class="mirror-line"></div>
-        <div class="logo-text">ジャイロ<br />リフレックス</div>
+        <div class="logo-text">ジャイロ<br />リフレクス</div>
       </div>
       <div id="start-hint">TAP TO START</div>
     </div>
@@ -366,6 +366,8 @@
       }
 
       function handleTap(idx) {
+        if (document.getElementById("title-screen").style.display !== "none")
+          return;
         if (gameState !== "PLAYING") return;
         if (idx === currentTarget) {
           const panel = panels[idx];
@@ -409,7 +411,6 @@
         const hue = Math.max(0, timeLeft * 1.8); // 100の時180(青)、0の時0(赤)
         timerFill.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
 
-        //rotation += 0.15 * level;
         updateRotation();
         document.getElementById(
           "game-view"

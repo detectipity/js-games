@@ -244,14 +244,29 @@
       });
 
       // パネル生成
+      // for (let i = 0; i < 9; i++) {
+      //   const p = document.createElement("div");
+      //   p.className = "panel";
+      //   p.addEventListener("touchstart", (e) => {
+      //     e.preventDefault();
+      //     handleTap(i);
+      //   });
+      //   p.addEventListener("mousedown", () => handleTap(i));
+      //   container.appendChild(p);
+      // }
       for (let i = 0; i < 9; i++) {
         const p = document.createElement("div");
         p.className = "panel";
-        p.addEventListener("touchstart", (e) => {
+
+        // pointerdown ひとつに統合
+        p.addEventListener("pointerdown", (e) => {
+          // pointerdownはマウス右クリック等も拾うので、左クリック/タッチのみに限定
+          if (e.button !== 0 && e.pointerType === "mouse") return;
+
           e.preventDefault();
           handleTap(i);
         });
-        p.addEventListener("mousedown", () => handleTap(i));
+
         container.appendChild(p);
       }
       const panels = document.querySelectorAll(".panel");

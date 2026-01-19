@@ -25,11 +25,8 @@
         justify-content: center;
         height: 100vh;
         overflow: hidden;
-        touch-action: none;
 
-        /* スクロールやピンチズームを含め、ブラウザの自動アクションを抑制 */
-        touch-action: none;
-        /* テキスト選択もオフにすると、よりゲーム機っぽくなります */
+        touch-action: manipulation;
         user-select: none;
         -webkit-user-select: none;
       }
@@ -69,11 +66,9 @@
         grid-template-rows: repeat(3, 1fr);
         gap: 12px;
 
-        /* スクロールやピンチズームを含め、ブラウザの自動アクションを抑制 */
-        touch-action: none;
-        /* テキスト選択もオフにすると、よりゲーム機っぽくなります */
         user-select: none;
         -webkit-user-select: none;
+        touch-action: manipulation;
       }
       .panel {
         background: var(--panel-color);
@@ -85,11 +80,9 @@
         position: relative;
         -webkit-tap-highlight-color: transparent;
 
-        /* スクロールやピンチズームを含め、ブラウザの自動アクションを抑制 */
-        touch-action: none;
-        /* テキスト選択もオフにすると、よりゲーム機っぽくなります */
         user-select: none;
         -webkit-user-select: none;
+        touch-action: manipulation;
       }
       .panel.active {
         background: var(--active-color);

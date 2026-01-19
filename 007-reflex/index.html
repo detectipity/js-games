@@ -1,1 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>ジャイロ・リフレックス</title>
+    <style>
+      :root {
+        --bg-color: #0a0a1a;
+        --panel-color: #1a1a3a;
+        --active-color: #00f2ff;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: var(--bg-color);
+        color: white;
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        overflow: hidden;
+        touch-action: none;
+      }
+      #ui {
+        font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        position: absolute;
+        top: 20px;
+        text-align: center;
+        width: 100%;
+        z-index: 10;
+      }
+      #timer-bar {
+        width: 70%;
+        height: 8px;
+        background: #333;
+        margin: 10px auto;
+        border-radius: 4px;
+      }
+      #timer-fill {
+        width: 100%;
+        height: 100%;
+        background: var(--active-color);
+        border-radius: 4px;
+      }
 
+      /* サイズを少し小さく調整(320px -> 280px) */
+      #game-view {
+        position: relative;
+        width: 280px;
+        height: 280px;
+      }
+      #game-container {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .panel {
+        background: var(--panel-color);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        position: relative;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .panel.active {
+        background: var(--active-color);
+        box-shadow: 0 0 20px var(--active-color);
+      }
+
+      #mirror-svg {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+      }
+
+      /* 正解した時のフワッとした光 */
+      .flash {
+        animation: pulse-white 0.4s ease-out;
+      }
+
+      @keyframes pulse-white {
+        0% {
+          box-shadow: 0 0 0px 0px rgba(255, 255, 255, 0.5);
+          background-color: var(--active-color);
+        }
+        30% {
+          box-shadow: 0 0 20px 10px rgba(255, 255, 255, 0.2);
+          background-color: #777; /* 一瞬白く光る */
+        }
+        100% {
+          box-shadow: 0 0 0px 0px rgba(255, 255, 255, 0);
+          background-color: var(--panel-color);
+        }
+      }
+
+      #mirror-render {
+        filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.8));
+        stroke-width: 4; /* 少し細くして鋭さを出す */
+        transition: all 0.1s ease-out; /* 鏡の切り替わりを滑らかに */
+      }
+
+      #title-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--bg-color);
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #logo-container {
+        position: relative;
+      }
+      .logo-text {
+        font-size: 32px;
+        font-weight: 900;
+        letter-spacing: 4px;
+        color: white;
+        text-align: center;
+      }
+      .logo-text {
+        position: relative;
+        overflow: hidden; /* 光がはみ出さないように */
+        background: linear-gradient(120deg, #fff 30%, #555 50%, #fff 70%);
+        background-size: 200% auto;
+        background-clip: text;
+        -webkit-background-clip: text;
+        color: transparent; /* 文字色を透明にして背景のグラデを見せる */
+        animation: shine 3s linear infinite;
+      }
+      @keyframes shine {
+        to {
+          background-position: 200% center;
+        }
+      }
+      .logo-text.reflected {
+        transform: scaleY(-1); /* 上下反転 */
+        opacity: 0.3;
+        filter: blur(2px);
+        margin-bottom: -10px; /* 鏡合わせの境界を詰める */
+      }
+      #start-hint {
+        margin-top: 50px;
+        font-weight: bold;
+        animation: blink 1.5s infinite;
+      }
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+      .mirror-line {
+        margin: 15pt;
+        width: 260px; /* 盤面のサイズに合わせる */
+        height: 3px;
+        background: white;
+        box-shadow: 0 0 15px white; /* 鏡が発光している感じ */
+        border-radius: 2px;
+        position: relative;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="title-screen">
+      <div id="logo-container">
+        <div class="logo-text reflected">ジャイロ<br />リフレックス</div>
+        <div class="mirror-line"></div>
+        <div class="logo-text">ジャイロ<br />リフレックス</div>
+      </div>
+      <div id="start-hint">TAP TO START</div>
+    </div>
+
+    <div id="ui">
+      <div id="score">FLOOR: 0</div>
+      <div id="timer-bar"><div id="timer-fill"></div></div>
+      <div id="msg">鏡の反射を見極めよ！</div>
+    </div>
+
+    <div id="game-view">
+      <div id="game-container"></div>
+      <svg id="mirror-svg">
+        <line
+          id="mirror-render"
+          stroke="white"
+          stroke-width="6"
+          stroke-linecap="round"
+        />
+      </svg>
+    </div>
+
+    <script>
+      const container = document.getElementById("game-container");
+      const timerFill = document.getElementById("timer-fill");
+      const mirrorRender = document.getElementById("mirror-render");
+      const scoreElement = document.getElementById("score");
+
+      let score = 0;
+      let timeLeft = 100;
+      let currentTarget = -1;
+      let currentLight = -1;
+      let mirrorType = "real";
+      let rotation = 0;
+      let level = 1;
+      let gameState = "TITLE";
+
+      const titleScreen = document.getElementById("title-screen");
+      titleScreen.addEventListener("pointerdown", () => {
+        if (gameState === "TITLE") {
+          startGame();
+        }
+      });
+
+      // パネル生成
+      for (let i = 0; i < 9; i++) {
+        const p = document.createElement("div");
+        p.className = "panel";
+        p.addEventListener("touchstart", (e) => {
+          e.preventDefault();
+          handleTap(i);
+        });
+        p.addEventListener("mousedown", () => handleTap(i));
+        container.appendChild(p);
+      }
+      const panels = document.querySelectorAll(".panel");
+
+      // 鏡パターンの定義 (type, offset)
+      const mirrorPatterns = [
+        { axis: "v", offset: -0.5 }, // 1列目と2列目の間
+        { axis: "v", offset: 0 },
+        { axis: "v", offset: 0.5 }, // 2列目と3列目の間
+        { axis: "h", offset: -0.5 }, // 上段と中段の間
+        { axis: "h", offset: 0 },
+        { axis: "h", offset: 0.5 }, // 中段と下段の間
+        { axis: "d1", offset: 0 }, // メイン対角線 \
+        { axis: "d1", offset: 1 }, // 1マス上ずれ
+        { axis: "d1", offset: -1 }, // 1マス下ずれ
+        { axis: "d2", offset: 0 }, // 逆対角線 /
+        { axis: "d2", offset: 1 },
+        { axis: "d2", offset: -1 },
+      ];
+
+      function initProblem() {
+        panels.forEach((p) => p.classList.remove("active"));
+
+        // 鏡の種類 (実線 or 点線フェイク)
+        mirrorType = Math.random() < 0.75 ? "real" : "fake";
+
+        let valid = false;
+        let attempt = 0;
+
+        while (!valid && attempt < 50) {
+          attempt++;
+          const pattern =
+            mirrorPatterns[Math.floor(Math.random() * mirrorPatterns.length)];
+          const lightIdx = Math.floor(Math.random() * 9);
+          const targetIdx = reflect(lightIdx, pattern);
+
+          // 条件チェック:
+          // 1. 盤面内にある
+          // 2. 鏡の上に正解がない (lightIdx !== targetIdx)
+          // 3. 前回の正解と同じ場所を避ける
+          if (
+            targetIdx !== null &&
+            lightIdx !== targetIdx &&
+            targetIdx !== currentTarget &&
+            lightIdx !== currentTarget
+          ) {
+            currentLight = lightIdx;
+            // フェイク鏡なら「光った場所」が正解
+            currentTarget = mirrorType === "fake" ? lightIdx : targetIdx;
+            drawMirror(pattern);
+            valid = true;
+          }
+        }
+        panels[currentLight].classList.add("active");
+      }
+
+      function reflect(idx, p) {
+        let x = (idx % 3) - 1; // -1, 0, 1
+        let y = Math.floor(idx / 3) - 1;
+        let nx = x,
+          ny = y;
+
+        if (p.axis === "v") {
+          // x = p.offset が鏡の線
+          nx = 2 * p.offset - x;
+        } else if (p.axis === "h") {
+          ny = 2 * p.offset - y;
+        } else if (p.axis === "d1") {
+          // \ 方向 (y = x + offset)
+          nx = y + p.offset;
+          ny = x - p.offset;
+        } else if (p.axis === "d2") {
+          // / 方向 (y = -x + offset)
+          nx = -y + p.offset;
+          ny = -x + p.offset;
+        }
+
+        if (Math.abs(nx) > 1 || Math.abs(ny) > 1) return null; // 盤面外
+        return (Math.round(ny) + 1) * 3 + (Math.round(nx) + 1);
+      }
+
+      function drawMirror(p) {
+        const S = 280; // View Size
+        const step = S / 3;
+        const center = S / 2;
+
+        mirrorRender.setAttribute(
+          "stroke",
+          mirrorType === "fake" ? "#ff4444" : "#ffffff"
+        );
+        mirrorRender.setAttribute(
+          "stroke-dasharray",
+          mirrorType === "fake" ? "8,8" : "0"
+        );
+
+        let x1, y1, x2, y2;
+        if (p.axis === "v") {
+          x1 = x2 = center + p.offset * step;
+          y1 = 0;
+          y2 = S;
+        } else if (p.axis === "h") {
+          y1 = y2 = center + p.offset * step;
+          x1 = 0;
+          x2 = S;
+        } else if (p.axis === "d1") {
+          // \ (左上から右下)
+          x1 = p.offset > 0 ? p.offset * step : 0;
+          y1 = p.offset < 0 ? -p.offset * step : 0;
+          x2 = p.offset < 0 ? S + p.offset * step : S;
+          y2 = p.offset > 0 ? S - p.offset * step : S;
+        } else if (p.axis === "d2") {
+          // / (右上から左下)
+          x1 = p.offset < 0 ? S + p.offset * step : S;
+          y1 = p.offset < 0 ? 0 : p.offset * step;
+          x2 = p.offset > 0 ? p.offset * step : 0;
+          y2 = p.offset > 0 ? S : S + p.offset * step;
+        }
+        mirrorRender.setAttribute("x1", x1);
+        mirrorRender.setAttribute("y1", y1);
+        mirrorRender.setAttribute("x2", x2);
+        mirrorRender.setAttribute("y2", y2);
+      }
+
+      function handleTap(idx) {
+        if (gameState !== "PLAYING") return;
+        if (idx === currentTarget) {
+          const panel = panels[idx];
+          panel.classList.add("flash");
+          setTimeout(() => panel.classList.remove("flash"), 400); // アニメーション時間と合わせる
+
+          score += 1;
+          timeLeft = Math.min(100, timeLeft + 8);
+          level += 0.08;
+          initProblem();
+        } else {
+          timeLeft -= 15;
+          document.body.style.backgroundColor = "#440000";
+          setTimeout(() => (document.body.style.backgroundColor = ""), 100);
+        }
+        scoreElement.innerText = `FLOOR: ${score}`;
+      }
+
+      function startGame() {
+        gameState = "PLAYING";
+        score = 0;
+        level = 1;
+        timeLeft = 100;
+        // タイトルUIを隠してゲームUIを表示
+        document.getElementById("title-screen").style.display = "none";
+        initProblem();
+        gameLoop();
+      }
+
+      function gameOver() {
+        gameState = "GAMEOVER";
+        alert("ゲームオーバー！ \n" + score + "階到達！");
+        location.reload(); // タイトルに戻る
+      }
+
+      function gameLoop() {
+        if (gameState !== "PLAYING") return;
+
+        timeLeft -= 0.1 * (1 + level * 0.15);
+        timerFill.style.width = Math.max(0, timeLeft) + "%";
+        const hue = Math.max(0, timeLeft * 1.8); // 100の時180(青)、0の時0(赤)
+        timerFill.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
+
+        //rotation += 0.15 * level;
+        updateRotation();
+        document.getElementById(
+          "game-view"
+        ).style.transform = `rotate(${rotation}deg)`;
+
+        if (timeLeft <= 0) {
+          gameOver();
+        }
+        requestAnimationFrame(gameLoop);
+      }
+
+      let angularVelocity = 0.15; // 現在の角速度
+
+      function updateRotation() {
+        const direction = Math.floor(score / 10) % 2 === 0 ? 1 : -1;
+        angularVelocity += direction * 0.008;
+        const baseSpeed = 0.15 * level;
+        angularVelocity = Math.min(
+          Math.max(-baseSpeed, angularVelocity),
+          baseSpeed
+        );
+
+        rotation += angularVelocity;
+      }
+    </script>
+  </body>
+</html>

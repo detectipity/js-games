@@ -27,6 +27,15 @@
         overflow: hidden;
         touch-action: none;
       }
+      body,
+      .panel,
+      #container {
+        /* スクロールやピンチズームを含め、ブラウザの自動アクションを抑制 */
+        touch-action: none;
+        /* テキスト選択もオフにすると、よりゲーム機っぽくなります */
+        user-select: none;
+        -webkit-user-select: none;
+      }
       #ui {
         font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         position: absolute;
@@ -244,16 +253,6 @@
       });
 
       // パネル生成
-      // for (let i = 0; i < 9; i++) {
-      //   const p = document.createElement("div");
-      //   p.className = "panel";
-      //   p.addEventListener("touchstart", (e) => {
-      //     e.preventDefault();
-      //     handleTap(i);
-      //   });
-      //   p.addEventListener("mousedown", () => handleTap(i));
-      //   container.appendChild(p);
-      // }
       for (let i = 0; i < 9; i++) {
         const p = document.createElement("div");
         p.className = "panel";
@@ -432,18 +431,6 @@
           initProblem();
           gameLoop();
         }, 400);
-        // gameState = "PLAYING";
-        // isInputLocked = true;
-        // score = 0;
-        // level = 1;
-        // timeLeft = 100;
-        // // タイトルUIを隠してゲームUIを表示
-        // document.getElementById("title-screen").style.display = "none";
-        // initProblem();
-        // gameLoop();
-        // setTimeout(() => {
-        //   isInputLocked = false;
-        // }, 3000);
       }
 
       function gameOver() {

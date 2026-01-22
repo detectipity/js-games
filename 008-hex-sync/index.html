@@ -92,6 +92,7 @@
       let hexRadius = 40; // 少し小さめに調整
       let grid = [];
       let isWon = false;
+      let isNeedsUpdate = true;
 
       const COLOR_A = "#ff9500"; // オレンジ
       const COLOR_B = "#ffffff"; // ホワイト
@@ -246,6 +247,19 @@
       }
 
       function draw() {
+        let animating = false;
+        grid.forEach((hex) => {
+          // 目標角度と現在の角度に差があれば、まだアニメーション中
+          if (Math.abs(hex.targetAngle - hex.visualAngle) > 0.001)
+            animating = true;
+        });
+
+        // クリア演出中、またはアニメーション中、または初回描画時のみ実行
+        if (!isNeedsUpdate && !animating && !isWon) {
+          requestAnimationFrame(draw);
+          return;
+        }
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         grid.forEach((hex) => {
@@ -290,6 +304,8 @@
           }
           ctx.restore();
         });
+
+        isNeedsUpdate = animating;
         requestAnimationFrame(draw);
       }
 
@@ -306,12 +322,14 @@
           if (Math.hypot(x - tx, y - ty) < hexRadius) {
             hex.rotate();
             checkWin();
+            isNeedsUpdate = true;
           }
         });
       }
 
       function changeMode(m) {
         currentMode = m;
+        isNeedsUpdate = true;
         resize();
         initGrid();
       }

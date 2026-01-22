@@ -1,1 +1,346 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>ヘキサシンクロ</title>
+    <style>
+      body {
+        margin: 0;
+        background: #ffde89;
+        color: #e0e0e0;
+        font-family: sans-serif;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      }
+      h1 {
+        margin: 0;
+        font-size: 40px;
+        letter-spacing: 4px;
+        color: #b96c00;
+        text-shadow: 0 0 10px rgba(255, 149, 0, 0.3);
+      }
+      canvas {
+        /* background: #ffc014; */
+        border-radius: 12px;
+        box-shadow: 0 0 40px rgba(186, 137, 13, 0.8);
+        touch-action: none;
+      }
+      .ui {
+        margin-bottom: 10px;
+        text-align: center;
+        width: 100%;
+        z-index: 10;
+      }
+      .modes {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 5px;
+      }
+      button {
+        padding: 8px 14px;
+        font-size: 13px;
+        cursor: pointer;
+        background: #2a2a2a;
+        color: #888;
+        border: 1px solid #444;
+        border-radius: 6px;
+      }
+      button.active {
+        background: #ff9500;
+        color: white;
+        border-color: #ffaa44;
+        font-weight: bold;
+      }
+      #status {
+        font-size: 30px;
+        font-weight: bold;
+        color: #ff4444;
+        height: 40px;
+        transition: 0.5s;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ui">
+      <h1 id="title">ヘキサシンクロ</h1>
+      <div id="status"></div>
+      <div class="modes">
+        <button onclick="changeMode('practice')" id="btn-practice">
+          プラクティス
+        </button>
+        <button onclick="changeMode('main')" id="btn-main">スタンダード</button>
+        <button onclick="changeMode('expert')" id="btn-expert">
+          エキスパート
+        </button>
+      </div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
 
+    <script>
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const statusText = document.getElementById("status");
+
+      let currentMode = "main";
+      let hexRadius = 40; // 少し小さめに調整
+      let grid = [];
+      let isWon = false;
+
+      const COLOR_A = "#ff9500"; // オレンジ
+      const COLOR_B = "#ffffff"; // ホワイト
+      const COLOR_FIXED = "#44ffaa";
+      const COLOR_SUCCESS = "#ff4444";
+
+      class Hex {
+        constructor(q, r) {
+          this.q = q;
+          this.r = r;
+          this.bits = 0;
+          this.isFixed = false;
+          this.isCorrect = false;
+          this.visualAngle = 0;
+          this.targetAngle = 0;
+        }
+
+        getPos() {
+          const x = canvas.width / 2 + hexRadius * 1.75 * (this.q + this.r / 2);
+          const y = canvas.height / 2 + hexRadius * 1.5 * this.r;
+          return { x, y };
+        }
+
+        rotate() {
+          if (this.isFixed) return;
+          // 1ビット右シフト（時計回り）
+          this.bits = ((this.bits << 1) | (this.bits >> 5)) & 0b111111;
+          this.targetAngle = 0;
+          this.visualAngle = -Math.PI / 3;
+        }
+
+        update() {
+          this.visualAngle += (this.targetAngle - this.visualAngle) * 0.2;
+        }
+      }
+
+      function initGrid() {
+        grid = [];
+        for (let q = -2; q <= 2; q++) {
+          for (let r = -2; r <= 2; r++) {
+            if (Math.abs(q + r) <= 2) grid.push(new Hex(q, r));
+          }
+        }
+
+        grid.forEach((hex) => {
+          const dist = Math.max(
+            Math.abs(hex.q),
+            Math.abs(hex.r),
+            Math.abs(hex.q + hex.r)
+          );
+          if (currentMode === "practice" && dist === 2) hex.isFixed = true;
+          if (currentMode === "main" && dist === 0) hex.isFixed = true;
+        });
+
+        ["practice", "main", "expert"].forEach((m) => {
+          document.getElementById("btn-" + m).className =
+            m === currentMode ? "active" : "";
+        });
+
+        // 正解盤面生成
+        // 1. まずは全マスのビットをランダムに決定（この時点ではバラバラ）
+        grid.forEach((hex) => {
+          hex.bits = Math.floor(Math.random() * 64);
+
+          // 全0・全1なら、1ビットだけ強制的に反転させて回避
+          if (hex.bits === 0) hex.bits = 1 << Math.floor(Math.random() * 6);
+          if (hex.bits === 63)
+            hex.bits &= ~(1 << Math.floor(Math.random() * 6));
+        });
+
+        // 2. 隣接する「辺」のビットを強制的に同期させる
+        // これにより「全0・全1回避」を維持しつつ、必ず解ける盤面になる
+        grid.forEach((hex) => {
+          for (let i = 0; i < 6; i++) {
+            const neighbor = getNeighbor(hex, i);
+            if (neighbor) {
+              const opp = (i + 3) % 6;
+              // 自分のi番目のビットを、隣のopp番目のビットに上書きコピー
+              const myBit = (hex.bits >> i) & 1;
+              if (myBit) {
+                neighbor.bits |= 1 << opp; // 隣を1にする
+              } else {
+                neighbor.bits &= ~(1 << opp); // 隣を0にする
+              }
+            }
+          }
+        });
+
+        // 3. 同期の結果、隣のマスが全0・全1になってしまった場合の最終調整
+        grid.forEach((hex) => {
+          if (hex.bits === 0 || hex.bits === 63) {
+            // どこか1箇所だけビットを反転
+            const bitPos = Math.floor(Math.random() * 6);
+            hex.bits ^= 1 << bitPos;
+            // その反転した「辺」の相方も反転させて整合性を保つ
+            const neighbor = getNeighbor(hex, bitPos);
+            if (neighbor) {
+              neighbor.bits ^= 1 << (bitPos + 3) % 6;
+            }
+          }
+        });
+
+        // シャッフル
+        grid.forEach((hex) => {
+          if (!hex.isFixed) {
+            const rotCount = Math.floor(Math.random() * 6) + 1;
+            for (let i = 0; i < rotCount; i++) {
+              hex.bits = ((hex.bits << 1) | (hex.bits >> 5)) & 0b111111;
+              //hex.targetAngle += Math.PI / 3;
+              //hex.visualAngle = hex.targetAngle;
+            }
+          }
+        });
+
+        isWon = false;
+        statusText.innerText = "";
+        checkWin();
+      }
+
+      function getNeighbor(hex, dir) {
+        const dirs = [
+          [1, 0],
+          [0, 1],
+          [-1, 1],
+          [-1, 0],
+          [0, -1],
+          [1, -1],
+        ];
+        const nq = hex.q + dirs[dir][0];
+        const nr = hex.r + dirs[dir][1];
+        return grid.find((h) => h.q === nq && h.r === nr);
+      }
+
+      function checkWin() {
+        let allClear = true;
+        grid.forEach((hex) => {
+          let hexCorrect = true;
+          for (let i = 0; i < 6; i++) {
+            const neighbor = getNeighbor(hex, i);
+            if (neighbor) {
+              const myBit = (hex.bits >> i) & 1;
+              const neighborBit = (neighbor.bits >> (i + 3) % 6) & 1;
+              if (myBit !== neighborBit) hexCorrect = false;
+            }
+          }
+          hex.isCorrect = hexCorrect;
+          if (!hexCorrect) allClear = false;
+        });
+        if (allClear && !isWon) {
+          // 今クリアした瞬間
+          isWon = true;
+          statusText.innerText = "コンプリート！！"; // テック系な名称例
+        }
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        grid.forEach((hex) => {
+          hex.update();
+          const { x, y } = hex.getPos();
+
+          ctx.beginPath();
+          ctx.arc(x, y, hexRadius - 7, 0, Math.PI * 2);
+          ctx.closePath();
+          //ctx.fillStyle = hex.isCorrect ? "rgba(68, 255, 170, 1)" : "#1f1f1f";
+          ctx.fillStyle = "#111";
+          ctx.fill();
+          ctx.strokeStyle = hex.isFixed
+            ? COLOR_FIXED
+            : hex.isCorrect
+            ? COLOR_SUCCESS
+            : "#555";
+          ctx.lineWidth = hex.isFixed ? 3 : 3;
+          ctx.stroke();
+
+          // 2. ピース描画（回転アニメーション対応）
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(hex.visualAngle);
+
+          for (let i = 0; i < 6; i++) {
+            const bit = (hex.bits >> i) & 1;
+            const startAngle = ((i * 60 - 29) * Math.PI) / 180;
+            const endAngle = ((i * 60 + 29) * Math.PI) / 180;
+
+            // グラデーションの作成
+            const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, hexRadius - 8);
+            const baseColor = bit ? COLOR_B : COLOR_A;
+            grad.addColorStop(0.5, baseColor);
+            grad.addColorStop(1, "#555555"); // 外側を少し暗くして立体感を出す
+
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, hexRadius - 8, startAngle, endAngle);
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+          }
+          ctx.restore();
+        });
+        requestAnimationFrame(draw);
+      }
+
+      function handleInput(e) {
+        if (isWon) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const tx = (clientX - rect.left) * (canvas.width / rect.width);
+        const ty = (clientY - rect.top) * (canvas.height / rect.height);
+
+        grid.forEach((hex) => {
+          const { x, y } = hex.getPos();
+          if (Math.hypot(x - tx, y - ty) < hexRadius) {
+            hex.rotate();
+            checkWin();
+          }
+        });
+      }
+
+      function changeMode(m) {
+        currentMode = m;
+        resize();
+      }
+
+      function resize() {
+        const size = Math.min(window.innerWidth - 30, 450);
+        canvas.width = size;
+        canvas.height = size * 1.1;
+        hexRadius = size / 10; // マスの大きさを画面幅に合わせて調整
+        initGrid();
+      }
+
+      window.addEventListener("mousedown", handleInput);
+      window.addEventListener(
+        "touchstart",
+        (e) => {
+          if (e.target === canvas) e.preventDefault();
+          handleInput(e);
+        },
+        { passive: false }
+      );
+      window.addEventListener("resize", resize);
+
+      resize();
+      draw();
+    </script>
+  </body>
+</html>

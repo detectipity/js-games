@@ -28,7 +28,6 @@
         text-shadow: 0 0 10px rgba(255, 149, 0, 0.3);
       }
       canvas {
-        /* background: #ffc014; */
         border-radius: 12px;
         box-shadow: 0 0 40px rgba(186, 137, 13, 0.8);
         touch-action: none;
@@ -202,8 +201,6 @@
             const rotCount = Math.floor(Math.random() * 6) + 1;
             for (let i = 0; i < rotCount; i++) {
               hex.bits = ((hex.bits << 1) | (hex.bits >> 5)) & 0b111111;
-              //hex.targetAngle += Math.PI / 3;
-              //hex.visualAngle = hex.targetAngle;
             }
           }
         });
@@ -245,7 +242,7 @@
         if (allClear && !isWon) {
           // 今クリアした瞬間
           isWon = true;
-          statusText.innerText = "コンプリート！！"; // テック系な名称例
+          statusText.innerText = "コンプリート！！";
         }
       }
 
@@ -259,7 +256,6 @@
           ctx.beginPath();
           ctx.arc(x, y, hexRadius - 7, 0, Math.PI * 2);
           ctx.closePath();
-          //ctx.fillStyle = hex.isCorrect ? "rgba(68, 255, 170, 1)" : "#1f1f1f";
           ctx.fillStyle = "#111";
           ctx.fill();
           ctx.strokeStyle = hex.isFixed
@@ -284,7 +280,7 @@
             const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, hexRadius - 8);
             const baseColor = bit ? COLOR_B : COLOR_A;
             grad.addColorStop(0.5, baseColor);
-            grad.addColorStop(1, "#555555"); // 外側を少し暗くして立体感を出す
+            grad.addColorStop(1, "#888"); // 外側を少し暗くして立体感を出す
 
             ctx.beginPath();
             ctx.moveTo(0, 0);
@@ -318,6 +314,7 @@
       function changeMode(m) {
         currentMode = m;
         resize();
+        initGrid();
       }
 
       function resize() {
@@ -325,7 +322,6 @@
         canvas.width = size;
         canvas.height = size * 1.1;
         hexRadius = size / 10; // マスの大きさを画面幅に合わせて調整
-        initGrid();
       }
 
       window.addEventListener("mousedown", handleInput);
@@ -337,9 +333,8 @@
         },
         { passive: false }
       );
-      window.addEventListener("resize", resize);
 
-      resize();
+      changeMode("main");
       draw();
     </script>
   </body>

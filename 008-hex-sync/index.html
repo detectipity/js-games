@@ -23,9 +23,8 @@
       h1 {
         margin: 0;
         font-size: 40px;
-        letter-spacing: 4px;
         color: #b96c00;
-        text-shadow: 0 0 10px rgba(255, 149, 0, 0.3);
+        text-shadow: 0 0 10px rgba(255, 149, 0, 0.5);
       }
       canvas {
         border-radius: 12px;
@@ -198,7 +197,7 @@
         // シャッフル
         grid.forEach((hex) => {
           if (!hex.isFixed) {
-            const rotCount = Math.floor(Math.random() * 6) + 1;
+            const rotCount = Math.floor(Math.random() * 11) + 1;
             for (let i = 0; i < rotCount; i++) {
               hex.bits = ((hex.bits << 1) | (hex.bits >> 5)) & 0b111111;
             }

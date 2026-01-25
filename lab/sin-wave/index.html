@@ -1,1 +1,283 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>波の合成パズル</title>
+    <style>
+      body {
+        background: #1a1a1a;
+        color: white;
+        font-family: "Helvetica Neue", Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin: 0;
+        padding: 20px;
+      }
+      canvas {
+        background: #000;
+        border: 2px solid #444;
+        border-radius: 12px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      }
+      .ui-container {
+        display: flex;
+        gap: 20px;
+        margin-top: 20px;
+      }
+      .panel {
+        background: #2a2a2a;
+        padding: 15px;
+        border-radius: 10px;
+        width: 220px;
+        border-top: 4px solid;
+      }
+      .red-panel {
+        border-color: #ff3e3e;
+      }
+      .blue-panel {
+        border-color: #3eafff;
+      }
+      .control-group {
+        margin-bottom: 15px;
+        text-align: center;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 0.8rem;
+        color: #ccc;
+        letter-spacing: 1px;
+      }
+      input[type="range"] {
+        width: 100%;
+        cursor: pointer;
+      }
+      .val {
+        font-family: monospace;
+        font-size: 1.1rem;
+        margin-top: 4px;
+      }
+      #status {
+        height: 40px;
+        font-size: 1.8rem;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #ffff3e;
+        text-shadow: 0 0 10px #ffff3e;
+      }
+      button {
+        padding: 10px 20px;
+        background: #444;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      button:hover {
+        background: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">READY...</div>
+    <canvas id="canvas" width="700" height="300"></canvas>
+    <button onclick="generateTarget()">新しいターゲットを生成</button>
 
+    <div class="ui-container">
+      <div class="panel red-panel">
+        <div class="control-group">
+          <label>赤：タカサ</label>
+          <input
+            type="range"
+            id="amp1"
+            min="10"
+            max="70"
+            step="10"
+            value="30"
+          />
+          <div class="val" id="ampVal1">30</div>
+        </div>
+        <div class="control-group">
+          <label>赤：コマカサ</label>
+          <input type="range" id="freq1" min="2" max="8" step="1" value="3" />
+          <div class="val" id="freqVal1">1.0</div>
+        </div>
+        <div class="control-group">
+          <label>赤：ズレ </label>
+          <input
+            type="range"
+            id="phase1"
+            min="0"
+            max="315"
+            step="45"
+            value="0"
+          />
+          <div class="val" id="phaseVal1">0</div>
+        </div>
+      </div>
+
+      <div class="panel blue-panel">
+        <div class="control-group">
+          <label>青：タカサ</label>
+          <input
+            type="range"
+            id="amp2"
+            min="10"
+            max="70"
+            step="10"
+            value="60"
+          />
+          <div class="val" id="ampVal2">30</div>
+        </div>
+        <div class="control-group">
+          <label>青：コマカサ</label>
+          <input type="range" id="freq2" min="2" max="8" step="1" value="5" />
+          <div class="val" id="freqVal2">2.0</div>
+        </div>
+        <div class="control-group">
+          <label>青：ズレ </label>
+          <input
+            type="range"
+            id="phase2"
+            min="0"
+            max="315"
+            step="45"
+            value="90"
+          />
+          <div class="val" id="phaseVal2">0</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      let targetData = [];
+
+      function degToRad(deg) {
+        return deg * (Math.PI / 180);
+      }
+
+      function getRandomFromInput(id) {
+        const input = document.getElementById(id);
+        const min = parseFloat(input.min);
+        const max = parseFloat(input.max);
+        const step = parseFloat(input.step);
+        const steps = (max - min) / step;
+        return min + Math.floor(Math.random() * (steps + 1)) * step;
+      }
+
+      // ターゲット波形の生成（スライダーの取りうる値の合成で作る）
+      function generateTarget() {
+        const a1 = getRandomFromInput("amp1");
+        const f1 = getRandomFromInput("freq1");
+        const p1 = degToRad(getRandomFromInput("phase1"));
+        const a2 = getRandomFromInput("amp2");
+        const f2 = getRandomFromInput("freq2");
+        const p2 = degToRad(getRandomFromInput("phase2"));
+
+        targetData = [];
+        for (let x = 0; x < canvas.width; x++) {
+          const y1 = a1 * Math.sin((x / canvas.width) * Math.PI * 2 * f1 + p1);
+          const y2 = a2 * Math.sin((x / canvas.width) * Math.PI * 2 * f2 + p2);
+          targetData.push(y1 + y2);
+        }
+        document.getElementById("status").innerText = "FIND THE WAVE!";
+        document.getElementById("status").style.color = "#ffff3e";
+        draw();
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "#333";
+        ctx.beginPath();
+        ctx.moveTo(0, 150);
+        ctx.lineTo(canvas.width, 150);
+        ctx.stroke();
+
+        const p = {
+          a1: parseFloat(document.getElementById("amp1").value),
+          f1: parseFloat(document.getElementById("freq1").value),
+          p1: degToRad(parseFloat(document.getElementById("phase1").value)),
+          a2: parseFloat(document.getElementById("amp2").value),
+          f2: parseFloat(document.getElementById("freq2").value),
+          p2: degToRad(parseFloat(document.getElementById("phase2").value)),
+        };
+
+        // ラベル更新
+        document.getElementById("ampVal1").innerText = p.a1;
+        document.getElementById("freqVal1").innerText = p.f1.toFixed(1);
+        document.getElementById("phaseVal1").innerText =
+          document.getElementById("phase1").value + "°";
+        document.getElementById("ampVal2").innerText = p.a2;
+        document.getElementById("freqVal2").innerText = p.f2.toFixed(1);
+        document.getElementById("phaseVal2").innerText =
+          document.getElementById("phase2").value + "°";
+
+        // 1. ターゲット（黄色）の描画
+        ctx.strokeStyle = "rgba(255, 255, 62, 0.5)";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        targetData.forEach((y, x) => {
+          if (x === 0) ctx.moveTo(x, 150 + y);
+          else ctx.lineTo(x, 150 + y);
+        });
+        ctx.stroke();
+
+        // 2. 個別の波（赤と青）を薄く表示
+        drawSimpleWave(p.a1, p.f1, p.p1, "rgba(255, 62, 62, 1)", 1);
+        drawSimpleWave(p.a2, p.f2, p.p2, "rgba(62, 175, 255, 1)", 1);
+
+        // 3. 合成波（紫）の描画
+        let isMatch = true;
+        ctx.strokeStyle = "#be3eff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let x = 0; x < canvas.width; x++) {
+          const y1 =
+            p.a1 * Math.sin((x / canvas.width) * Math.PI * 2 * p.f1 + p.p1);
+          const y2 =
+            p.a2 * Math.sin((x / canvas.width) * Math.PI * 2 * p.f2 + p.p2);
+          const currentY = y1 + y2;
+          if (x === 0) ctx.moveTo(x, 150 + currentY);
+          else ctx.lineTo(x, 150 + currentY);
+
+          // 判定：1ピクセルでも大きくズレていたら不一致
+          if (Math.abs(currentY - targetData[x]) > 0.1) isMatch = false;
+        }
+        ctx.stroke();
+
+        if (isMatch && targetData.length > 0) {
+          document.getElementById("status").innerText = "SYNCHRO!";
+          document.getElementById("status").style.color = "#00ff00";
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = "#be3eff"; // 一致したら光らせる
+          return;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+
+        requestAnimationFrame(draw);
+      }
+
+      function drawSimpleWave(amp, freq, phase, color, width) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        for (let x = 0; x < canvas.width; x++) {
+          const y =
+            150 +
+            amp * Math.sin((x / canvas.width) * Math.PI * 2 * freq + phase);
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      generateTarget();
+      draw();
+    </script>
+  </body>
+</html>
